@@ -268,16 +268,18 @@ class GithubUpdateService {
   Future<void> installApk(String apkPath) async {
     _log('installApk called; apkPath=$apkPath');
     if (!Platform.isAndroid) return;
-    const String authority = 'com.example.fridgie_app.fileprovider';
+    const String authority = 'com.fridgie_app.fileprovider';
     final String filename = p.basename(apkPath);
     final String contentUri =
         'content://$authority/external_files/$filename';
+    _log('installApk uri=$contentUri');
     final AndroidIntent intent = AndroidIntent(
       action: 'android.intent.action.VIEW',
       data: contentUri,
       type: 'application/vnd.android.package-archive',
       // FLAG_GRANT_READ_URI_PERMISSION = 0x00000001
-      flags: <int>[0x00000001],
+      // FLAG_ACTIVITY_NEW_TASK = 0x10000000
+      flags: <int>[0x00000001, 0x10000000],
     );
     await intent.launch();
     _log('installApk intent launched');
