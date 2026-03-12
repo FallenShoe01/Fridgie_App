@@ -84,7 +84,7 @@
   "settings_days_before_label": "Днів до терміну",
   "settings_time_label": "Час сповіщення",
   "settings_ota_header": "Оновлення OTA (необов'язково)",
-  "settings_ota_description": "Перевірка оновлень із GitHub Releases: FallenShoe01/Fridgie_App.",
+  "settings_ota_description": "Перевірка оновлень із GitHub Releases",
   "settings_github_owner_label": "Власник GitHub / користувач",
   "settings_github_repo_label": "Назва репозиторію GitHub",
   "settings_check_updates": "Перевірити оновлення",

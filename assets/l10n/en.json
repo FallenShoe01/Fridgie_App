@@ -84,7 +84,7 @@
   "settings_days_before_label": "Days before expiry",
   "settings_time_label": "Notification time",
   "settings_ota_header": "OTA Updates (optional)",
-  "settings_ota_description": "Checks updates from GitHub releases: FallenShoe01/Fridgie_App.",
+  "settings_ota_description": "Checks updates from GitHub releases",
   "settings_github_owner_label": "GitHub owner / username",
   "settings_github_repo_label": "GitHub repository name",
   "settings_check_updates": "Check for updates",
