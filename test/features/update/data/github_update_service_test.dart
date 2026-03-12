@@ -39,10 +39,7 @@ void main() {
     );
 
     final service = GithubUpdateService(dio: dio);
-    final release = await service.fetchLatestRelease(
-      owner: 'example',
-      repo: 'fridgie_app',
-    );
+    final release = await service.fetchLatestRelease();
 
     expect(release, isNotNull);
     expect(release!.tag, 'v0.3.0');

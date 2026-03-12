@@ -12,6 +12,8 @@
   "main_total_products": "Усього продуктів",
   "main_expiring_soon": "Закінчуються за 3 дні",
   "main_expired": "Прострочені",
+  "main_eaten_count": "З'їдено",
+  "main_trash_count": "В смітті",
   "main_recent_title": "Останні продукти",
 
   "product_list_empty": "Поки немає продуктів. Натисніть «Додати», щоб створити перший.",
@@ -82,7 +84,7 @@
   "settings_days_before_label": "Днів до терміну",
   "settings_time_label": "Час сповіщення",
   "settings_ota_header": "Оновлення OTA (необов'язково)",
-  "settings_ota_description": "Вкажіть свій репозиторій GitHub Releases для OTA-оновлень APK.",
+  "settings_ota_description": "Перевірка оновлень із GitHub Releases: FallenShoe01/Fridgie_App.",
   "settings_github_owner_label": "Власник GitHub / користувач",
   "settings_github_repo_label": "Назва репозиторію GitHub",
   "settings_check_updates": "Перевірити оновлення",
@@ -123,5 +125,8 @@
   "background_reliability_xiaomi_body": "Перейдіть у Налаштування -> Програми -> Fridgie -> Батарея -> Без обмежень.\nТакож увімкніть автозапуск у Security -> Autostart.",
 
   "confirm_cancel": "Скасувати",
-  "confirm_ok": "OK"
+  "confirm_ok": "OK",
+
+  "product_not_found": "Продукт не знайдено",
+  "product_no_batches": "Партій ще немає"
 }

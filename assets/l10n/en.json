@@ -12,6 +12,8 @@
   "main_total_products": "Total products",
   "main_expiring_soon": "Expiring in 3 days",
   "main_expired": "Expired",
+  "main_eaten_count": "Eaten",
+  "main_trash_count": "In trash",
   "main_recent_title": "Recent products",
 
   "product_list_empty": "No products yet. Tap Add to create your first item.",
@@ -82,7 +84,7 @@
   "settings_days_before_label": "Days before expiry",
   "settings_time_label": "Notification time",
   "settings_ota_header": "OTA Updates (optional)",
-  "settings_ota_description": "Enter your GitHub release repository to enable over-the-air APK updates.",
+  "settings_ota_description": "Checks updates from GitHub releases: FallenShoe01/Fridgie_App.",
   "settings_github_owner_label": "GitHub owner / username",
   "settings_github_repo_label": "GitHub repository name",
   "settings_check_updates": "Check for updates",
@@ -123,5 +125,8 @@
   "background_reliability_xiaomi_body": "Go to Settings → Apps → Fridgie → Battery saver → No restrictions.\nAlso enable Autostart in Security → Autostart.",
 
   "confirm_cancel": "Cancel",
-  "confirm_ok": "OK"
+  "confirm_ok": "OK",
+
+  "product_not_found": "Product not found",
+  "product_no_batches": "No batches added yet"
 }

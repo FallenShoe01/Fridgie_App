@@ -23,8 +23,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isLoading = true;
   final TextEditingController _daysCtrl = TextEditingController();
   final TextEditingController _timeCtrl = TextEditingController();
-  final TextEditingController _ownerCtrl = TextEditingController();
-  final TextEditingController _repoCtrl = TextEditingController();
   bool _isCheckingUpdate = false;
   String? _updateMsg;
   ThemeMode _themeMode = ThemeMode.system;
@@ -41,8 +39,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void dispose() {
     _daysCtrl.dispose();
     _timeCtrl.dispose();
-    _ownerCtrl.dispose();
-    _repoCtrl.dispose();
     super.dispose();
   }
 
@@ -56,8 +52,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       _daysCtrl.text = map['default_notification_days_before'] ?? '3';
       _timeCtrl.text = map['default_notification_time_local'] ?? '09:00';
-      _ownerCtrl.text = map['github_update_owner'] ?? '';
-      _repoCtrl.text = map['github_update_repo'] ?? '';
       _themeMode = _themeModeFromString(map['ui_theme_mode']);
       _accent = accentFromString(map['ui_accent'] ?? 'teal');
       _localeCode = map['ui_locale'] == 'uk' ? 'uk' : 'en';
@@ -75,14 +69,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       AppSettingsCompanion(
         key: const drift.Value('default_notification_time_local'),
         value: drift.Value(_timeCtrl.text.trim()),
-      ),
-      AppSettingsCompanion(
-        key: const drift.Value('github_update_owner'),
-        value: drift.Value(_ownerCtrl.text.trim()),
-      ),
-      AppSettingsCompanion(
-        key: const drift.Value('github_update_repo'),
-        value: drift.Value(_repoCtrl.text.trim()),
       ),
       AppSettingsCompanion(
         key: const drift.Value('ui_theme_mode'),
@@ -128,13 +114,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _checkForUpdate() async {
-    final String owner = _ownerCtrl.text.trim();
-    final String repo = _repoCtrl.text.trim();
-    if (owner.isEmpty || repo.isEmpty) {
-      setState(() => _updateMsg = 'settings_no_github_owner_repo'.tr());
-      return;
-    }
-
     setState(() {
       _isCheckingUpdate = true;
       _updateMsg = null;
@@ -143,8 +122,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       final GithubUpdateService updateService =
           ref.read(githubUpdateServiceProvider);
-      final GithubReleaseInfo? info =
-          await updateService.fetchLatestRelease(owner: owner, repo: repo);
+        final GithubReleaseInfo? info = await updateService.fetchLatestRelease();
       if (!mounted) return;
 
       if (info == null) {
@@ -341,22 +319,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 Text(
                   'settings_ota_description'.tr(),
                   style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _ownerCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'settings_github_owner_label'.tr(),
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _repoCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'settings_github_repo_label'.tr(),
-                    border: const OutlineInputBorder(),
-                  ),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(

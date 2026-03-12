@@ -76,3 +76,7 @@ final settingsControllerProvider =
     StateNotifierProvider<SettingsController, AsyncValue<SettingsState>>(
   (Ref ref) => SettingsController(ref.read(dbProvider)),
 );
+
+/// Shared one-shot status filter: set by Main dashboard before navigating to
+/// Products tab so the list pre-selects that filter.
+final productStatusFilterProvider = StateProvider<String?>((Ref ref) => null);

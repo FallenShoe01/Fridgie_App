@@ -26,6 +26,12 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   void initState() {
     super.initState();
     _loadSortPref();
+    // One-shot: if the dashboard set a status filter, apply it immediately.
+    final String? initial = ref.read(productStatusFilterProvider);
+    if (initial != null) {
+      _statusFilter = initial;
+      ref.read(productStatusFilterProvider.notifier).state = null;
+    }
   }
 
   Future<void> _loadSortPref() async {
@@ -79,65 +85,9 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _editProduct(Product product) async {
-    final TextEditingController nameController =
-        TextEditingController(text: product.canonicalName);
-    final TextEditingController categoryController =
-        TextEditingController(text: product.category);
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('product_action_edit'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: 'table_header_name'.tr(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: categoryController,
-                decoration: InputDecoration(
-                  labelText: 'table_header_category'.tr(),
-                ),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text('confirm_cancel'.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text('confirm_ok'.tr()),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true) {
-      await ref.read(productRepositoryProvider).updateProduct(
-            product.copyWith(
-              canonicalName: nameController.text.trim().isEmpty
-                  ? product.canonicalName
-                  : nameController.text.trim(),
-              category: categoryController.text.trim().isEmpty
-                  ? product.category
-                  : categoryController.text.trim(),
-              updatedAt: DateTime.now(),
-            ),
-          );
-      if (mounted) setState(() {});
-    }
-
-    nameController.dispose();
-    categoryController.dispose();
+    final bool? edited =
+        await context.push<bool>('/edit-product?id=${product.id}');
+    if (edited == true && mounted) setState(() {});
   }
 
   Future<void> _markEaten(Product product) async {
@@ -507,6 +457,11 @@ class _CategoriesManagerState extends ConsumerState<_CategoriesManager> {
     });
   }
 
+  Future<void> _deleteCategory(CategoryPreset item) async {
+    await ref.read(categoryPresetStoreProvider).deleteByName(item.name);
+    await _refresh();
+  }
+
   Future<void> _addCategory() async {
     final TextEditingController name = TextEditingController();
     final TextEditingController days = TextEditingController(text: '7');
@@ -605,6 +560,10 @@ class _CategoriesManagerState extends ConsumerState<_CategoriesManager> {
                             'days': '${item.defaultExpiryDays}',
                           },
                         ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _deleteCategory(item),
                       ),
                     );
                   },

@@ -10,13 +10,12 @@ class GithubUpdateService {
   GithubUpdateService({required Dio dio}) : _dio = dio;
 
   final Dio _dio;
+  static const String fixedOwner = 'FallenShoe01';
+  static const String fixedRepo = 'Fridgie_App';
 
-  Future<GithubReleaseInfo?> fetchLatestRelease({
-    required String owner,
-    required String repo,
-  }) async {
+  Future<GithubReleaseInfo?> fetchLatestRelease() async {
     final String endpoint =
-        'https://api.github.com/repos/$owner/$repo/releases/latest';
+        'https://api.github.com/repos/$fixedOwner/$fixedRepo/releases/latest';
 
     try {
       final Response<dynamic> response = await _dio.get<dynamic>(endpoint);

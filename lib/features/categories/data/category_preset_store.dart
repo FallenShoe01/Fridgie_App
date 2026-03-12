@@ -1,6 +1,4 @@
-import 'dart:convert';
-
-import 'package:drift/drift.dart' as drift;
+import 'package:drift/drift.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 
 class CategoryPreset {
@@ -11,58 +9,47 @@ class CategoryPreset {
 
   final String name;
   final int defaultExpiryDays;
-
-  Map<String, Object> toJson() => <String, Object>{
-        'name': name,
-        'defaultExpiryDays': defaultExpiryDays,
-      };
-
-  factory CategoryPreset.fromJson(Map<String, dynamic> json) {
-    return CategoryPreset(
-      name: (json['name'] as String? ?? '').trim(),
-      defaultExpiryDays: (json['defaultExpiryDays'] as num? ?? 0).toInt(),
-    );
-  }
 }
 
 class CategoryPresetStore {
   CategoryPresetStore(this._db);
 
   final AppDatabase _db;
-  static const String _settingsKey = 'category_presets_v1';
 
   Future<List<CategoryPreset>> getAll() async {
-    final AppSetting? row = await (_db.select(_db.appSettings)
-          ..where((AppSettings t) => t.key.equals(_settingsKey)))
-        .getSingleOrNull();
-
-    if (row == null || row.value.trim().isEmpty) {
-      return <CategoryPreset>[];
-    }
-
-    final List<dynamic> decoded = jsonDecode(row.value) as List<dynamic>;
-    return decoded
-        .whereType<Map<dynamic, dynamic>>()
+    final List<Category> rows = await (_db.select(_db.categories)
+          ..orderBy(<OrderingTerm Function(Categories)>[
+            (Categories t) => OrderingTerm.asc(t.name),
+          ]))
+        .get();
+    return rows
         .map(
-          (Map<dynamic, dynamic> item) =>
-              CategoryPreset.fromJson(Map<String, dynamic>.from(item)),
+          (Category r) => CategoryPreset(
+            name: r.name,
+            defaultExpiryDays: r.defaultExpiryDays,
+          ),
         )
-        .where((CategoryPreset item) => item.name.isNotEmpty)
         .toList(growable: false);
   }
 
-  Future<void> saveAll(List<CategoryPreset> items) {
-    final String raw = jsonEncode(
-      items
-          .map((CategoryPreset item) => item.toJson())
-          .toList(growable: false),
-    );
+  Future<void> saveAll(List<CategoryPreset> items) async {
+    await _db.transaction(() async {
+      await _db.delete(_db.categories).go();
+      for (final CategoryPreset item in items) {
+        if (item.name.trim().isEmpty) continue;
+        await _db.into(_db.categories).insert(
+              CategoriesCompanion.insert(
+                name: item.name.trim(),
+                defaultExpiryDays: Value<int>(item.defaultExpiryDays),
+              ),
+            );
+      }
+    });
+  }
 
-    return _db.into(_db.appSettings).insertOnConflictUpdate(
-          AppSettingsCompanion(
-            key: const drift.Value<String>(_settingsKey),
-            value: drift.Value<String>(raw),
-          ),
-        );
+  Future<void> deleteByName(String name) {
+    return (_db.delete(_db.categories)
+          ..where((Categories t) => t.name.equals(name)))
+        .go();
   }
 }

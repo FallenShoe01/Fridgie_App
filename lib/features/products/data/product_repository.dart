@@ -157,4 +157,15 @@ class ProductRepository {
       );
     }).toList(growable: false);
   }
+
+  Future<Map<String, int>> getStatusCounts() async {
+    final List<QueryRow> rows = await _db.customSelect(
+      'SELECT status, COUNT(*) AS cnt FROM products GROUP BY status',
+      readsFrom: <ResultSetImplementation>{_db.products},
+    ).get();
+    return <String, int>{
+      for (final QueryRow row in rows)
+        row.read<String>('status'): row.read<int>('cnt'),
+    };
+  }
 }

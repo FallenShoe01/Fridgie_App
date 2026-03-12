@@ -90,6 +90,15 @@ class AppSettings extends Table {
   Set<Column<Object>>? get primaryKey => {key};
 }
 
+class Categories extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get name => text()();
+
+  IntColumn get defaultExpiryDays =>
+      integer().withDefault(const Constant(7))();
+}
+
 @DriftDatabase(
   tables: <Type>[
     Products,
@@ -97,13 +106,14 @@ class AppSettings extends Table {
     ProductImages,
     LookupCache,
     AppSettings,
+    Categories,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -136,6 +146,9 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'ALTER TABLE products ADD COLUMN status_updated_at INTEGER NULL;',
         );
+      }
+      if (from < 3) {
+        await m.createTable(categories);
       }
     },
   );
