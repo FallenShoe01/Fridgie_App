@@ -114,6 +114,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _checkForUpdate() async {
+    debugPrint('[Update] User tapped Check for updates');
     setState(() {
       _isCheckingUpdate = true;
       _updateMsg = null;
@@ -122,10 +123,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       final GithubUpdateService updateService =
           ref.read(githubUpdateServiceProvider);
-        final GithubReleaseInfo? info = await updateService.fetchLatestRelease();
+      final GithubReleaseInfo? info = await updateService.fetchLatestRelease();
+      debugPrint(
+        '[Update] fetchLatestRelease completed; found=${info != null}',
+      );
       if (!mounted) return;
 
       if (info == null) {
+        debugPrint('[Update] No release info available from GitHub');
         setState(
           () => _updateMsg = 'settings_no_github_connection'.tr(),
         );
@@ -133,6 +138,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
 
       final PackageInfo pkgInfo = await PackageInfo.fromPlatform();
+      debugPrint(
+        '[Update] Version check local=${pkgInfo.version} remote=${info.tag}',
+      );
       if (!mounted) return;
 
       final bool isNewer = updateService.isRemoteVersionNewer(
@@ -141,6 +149,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
 
       if (!isNewer) {
+        debugPrint('[Update] App is up to date');
         setState(
           () => _updateMsg = 'settings_up_to_date'.tr(
             namedArgs: <String, String>{'version': pkgInfo.version},
@@ -149,10 +158,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         return;
       }
 
+      debugPrint('[Update] New version available; opening update dialog');
       setState(() => _updateMsg = null);
       await _showUpdateDialog(info);
+    } catch (e) {
+      debugPrint('[Update] Update check exception: $e');
+      rethrow;
     } finally {
       if (mounted) setState(() => _isCheckingUpdate = false);
+      debugPrint('[Update] Update check finished');
     }
   }
 
@@ -186,6 +200,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   void _startDownloadInstall(GithubReleaseInfo info) {
+    debugPrint('[Update] Start download/install for tag=${info.tag}');
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -411,6 +426,7 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
 
   Future<void> _start() async {
     try {
+      debugPrint('[Update] Download dialog started');
       final String path = await widget.service.downloadApk(
         apkUrl: widget.info.apkUrl,
         apkName: widget.info.apkName,
@@ -419,10 +435,13 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
         },
       );
       if (!mounted) return;
+      debugPrint('[Update] Download complete path=$path');
       setState(() => _installing = true);
       Navigator.pop(context);
       await widget.service.installApk(path);
+      debugPrint('[Update] Install intent sent');
     } catch (e) {
+      debugPrint('[Update] Download/install exception: $e');
       if (mounted) setState(() => _error = e.toString());
     }
   }
