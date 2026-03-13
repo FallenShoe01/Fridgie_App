@@ -23,8 +23,6 @@
   "product_list_sort_expiry_latest": "Expiry latest",
   "product_list_sort_name_az": "Name A–Z",
   "product_list_sort_name_za": "Name Z–A",
-  "product_list_days_expired": "expired",
-  "product_list_days_today": "today",
   "product_list_days_remaining": "{days} d",
   "product_list_days_no_date": "no date",
   "batch_expiry_with_days": "Expiry: {date}  •  {days}",

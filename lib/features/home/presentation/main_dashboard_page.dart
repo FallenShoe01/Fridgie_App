@@ -55,7 +55,7 @@ class MainDashboardPage extends ConsumerWidget {
         final List<ProductListItem> expiringSoonItems = activeRows.where((ProductListItem item) {
           if (item.nearestExpiry == null) return false;
           final int days = item.nearestExpiry!.difference(dayStart).inDays;
-          return days >= 0 && days <= expiringDays;
+          return days <= expiringDays;
         }).toList();
         
 
@@ -107,11 +107,7 @@ class MainDashboardPage extends ConsumerWidget {
                 final int daysLeft = expiry == null ? 0 : expiry.difference(dayStart).inDays;
                 final String daysText = expiry == null
                     ? ''
-                    : (daysLeft < 0
-                        ? '${-daysLeft} ${'product_list_days_expired'.tr()}'
-                        : daysLeft == 0
-                            ? 'product_list_days_today'.tr()
-                            : 'product_list_days_remaining'.tr(namedArgs: <String, String>{'days': '$daysLeft'}));
+                  : 'product_list_days_remaining'.tr(namedArgs: <String, String>{'days': '$daysLeft'});
 
                 return Card(
                   child: ListTile(

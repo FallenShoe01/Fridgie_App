@@ -277,31 +277,99 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       _block(
                         title: 'settings_appearance_header'.tr(),
                         children: <Widget>[
-                          SegmentedButton<ThemeMode>(
-                            segments: <ButtonSegment<ThemeMode>>[
-                              ButtonSegment<ThemeMode>(
-                                value: ThemeMode.system,
-                                label: Text('settings_theme_system'.tr()),
-                              ),
-                              ButtonSegment<ThemeMode>(
-                                value: ThemeMode.light,
-                                label: Text('settings_theme_light'.tr()),
-                              ),
-                              ButtonSegment<ThemeMode>(
-                                value: ThemeMode.dark,
-                                label: Text('settings_theme_dark'.tr()),
-                              ),
-                            ],
-                            selected: <ThemeMode>{_themeMode},
-                            onSelectionChanged: (Set<ThemeMode> selection) {
-                              final ThemeMode selected = selection.first;
-                              setState(() {
-                                _themeMode = selected;
-                              });
-                              ref
-                                  .read(settingsControllerProvider.notifier)
-                                  .setThemeMode(selected);
-                            },
+                          Center(
+                            child: LayoutBuilder(
+                              builder: (BuildContext ctx, BoxConstraints constraints) {
+                                final double totalWidth = constraints.maxWidth.isFinite
+                                    ? constraints.maxWidth
+                                    : MediaQuery.of(ctx).size.width;
+                                final double segWidth = totalWidth / 3.0;
+                                return SegmentedButton<ThemeMode>(
+                                  segments: <ButtonSegment<ThemeMode>>[
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.system,
+                                      label: SizedBox(
+                                        width: segWidth,
+                                        child: Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Center(
+                                                child: Text(
+                                                  'settings_theme_system'.tr(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(fontSize: 14),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.light,
+                                      label: SizedBox(
+                                        width: segWidth,
+                                        child: Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Center(
+                                                child: Text(
+                                                  'settings_theme_light'.tr(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(fontSize: 14),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.dark,
+                                      label: SizedBox(
+                                        width: segWidth,
+                                        child: Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Center(
+                                                child: Text(
+                                                  'settings_theme_dark'.tr(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(fontSize: 14),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  showSelectedIcon: false,
+                                  selected: <ThemeMode>{_themeMode},
+                                  onSelectionChanged: (Set<ThemeMode> selection) {
+                                    final ThemeMode selected = selection.first;
+                                    setState(() {
+                                      _themeMode = selected;
+                                    });
+                                    ref
+                                        .read(settingsControllerProvider.notifier)
+                                        .setThemeMode(selected);
+                                  },
+                                );
+                              },
+                            ),
                           ),
                         ],
                       ),

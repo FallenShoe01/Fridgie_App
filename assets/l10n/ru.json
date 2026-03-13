@@ -23,8 +23,6 @@
   "product_list_sort_expiry_latest": "Срок: самый дальний",
   "product_list_sort_name_az": "Название А–Я",
   "product_list_sort_name_za": "Название Я–А",
-  "product_list_days_expired": "просрочено",
-  "product_list_days_today": "сегодня",
   "product_list_days_remaining": "{days} д",
   "product_list_days_no_date": "нет срока",
   "product_scan_batch_added": "Партия обновлена после сканирования штрихкода",
@@ -73,9 +71,7 @@
   "category_empty": "Пока нет категорий",
   "category_default_days": "Дней до срока по умолчанию",
   "category_default_days_value": "По умолчанию: {days} дней",
-
-  "product_list_sort_name_az": "Название А–Я",
-  "product_list_sort_name_za": "Название Я–А",
+ 
   "delete_product_confirm": "Удалить этот товар и все его партии?",
   "no_batches_for_product": "Партии для этого товара не найдены",
   "percent_value": "{pct} %",

@@ -792,12 +792,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final DateTime now = DateTime.now();
     final int days =
         expiry.difference(DateTime(now.year, now.month, now.day)).inDays;
-    if (days < 0) {
-      return 'product_list_days_expired'.tr();
-    }
-    if (days == 0) {
-      return 'product_list_days_today'.tr();
-    }
+
+    // Always show a calculated day value: negative for expired, zero for today.
     return 'product_list_days_remaining'.tr(namedArgs: <String, String>{'days': '$days'});
   }
 
