@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
@@ -13,7 +14,14 @@ import 'package:fridgie_app/features/products/presentation/widgets/product_autoc
 import 'package:image_picker/image_picker.dart';
 
 class AddProductPage extends ConsumerStatefulWidget {
-  const AddProductPage({super.key});
+  const AddProductPage({
+    super.key,
+    this.editProductId,
+    this.editCatalogItemId,
+  });
+
+  final int? editProductId;
+  final int? editCatalogItemId;
 
   @override
   ConsumerState<AddProductPage> createState() => _AddProductPageState();
@@ -35,13 +43,17 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
   bool _isLoadingLookup = false;
   bool _isSaving = false;
+  bool _isLoadingInitialData = false;
   String? _localImagePath;
   List<CategoryPreset> _categoryPresets = <CategoryPreset>[];
+  Product? _editingProduct;
+  CatalogItem? _editingCatalogItem;
 
   @override
   void initState() {
     super.initState();
     _loadCategoryPresets();
+    _loadInitialDataForEdit();
   }
 
   @override
@@ -60,6 +72,94 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     }
     setState(() {
       _categoryPresets = presets;
+    });
+  }
+
+  bool get _isEditMode =>
+      widget.editProductId != null || widget.editCatalogItemId != null;
+
+  bool get _isCatalogOnlyEdit =>
+      widget.editCatalogItemId != null && widget.editProductId == null;
+
+  Future<void> _loadInitialDataForEdit() async {
+    if (!_isEditMode) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingInitialData = true;
+    });
+
+    if (widget.editProductId != null) {
+      final int productId = widget.editProductId!;
+      final AppDatabase db = ref.read(dbProvider);
+
+      final Product? product = await (db.select(db.products)
+            ..where((Products t) => t.id.equals(productId)))
+          .getSingleOrNull();
+      final List<ProductBatch> batches = await ref
+          .read(batchRepositoryProvider)
+          .getBatchesByProduct(productId);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (product != null) {
+        _editingProduct = product;
+        _barcodeController.text = product.barcode ?? '';
+        _nameController.text = product.canonicalName;
+        _categoryController.text = product.category;
+        _localImagePath = product.defaultImagePath;
+
+        _batches
+          ..clear()
+          ..addAll(
+            batches.isEmpty
+                ? <_DraftBatch>[
+                    _DraftBatch(
+                      quantity: 1,
+                      buyDate: DateTime.now(),
+                      expiryDate: DateTime.now().add(const Duration(days: 7)),
+                    ),
+                  ]
+                : batches
+                    .map(
+                      (ProductBatch b) => _DraftBatch(
+                        quantity: b.quantity,
+                        buyDate: b.buyDate ?? DateTime.now(),
+                        expiryDate: b.expiryDate,
+                        notifDaysBefore: b.notificationDaysBefore,
+                        notifTime: b.notificationTimeLocal,
+                      ),
+                    )
+                    .toList(growable: false),
+          );
+      }
+    } else if (widget.editCatalogItemId != null) {
+      final CatalogItem? item = await ref
+          .read(catalogRepositoryProvider)
+          .getById(widget.editCatalogItemId!);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (item != null) {
+        _editingCatalogItem = item;
+        _barcodeController.text = item.barcode ?? '';
+        _nameController.text = item.canonicalName;
+        _categoryController.text = item.category;
+        _localImagePath = item.defaultImagePath;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingInitialData = false;
     });
   }
 
@@ -254,6 +354,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
     final AppDatabase db = ref.read(dbProvider);
     final productRepository = ref.read(productRepositoryProvider);
+    final catalogRepository = ref.read(catalogRepositoryProvider);
     final batchRepository = ref.read(batchRepositoryProvider);
     final notificationService = ref.read(notificationServiceProvider);
 
@@ -262,48 +363,115 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final String category = _categoryController.text.trim().isEmpty
         ? 'unknown'
         : _categoryController.text.trim();
-    final int productId = await productRepository.createProduct(
-      ProductsCompanion.insert(
+    if (_isCatalogOnlyEdit && _editingCatalogItem != null) {
+      await catalogRepository.updateCatalogItem(
+        _editingCatalogItem!,
         canonicalName: name,
-        barcode: barcode.isEmpty ? const drift.Value.absent() : drift.Value(barcode),
-        category: drift.Value(category),
-        defaultImagePath: _localImagePath == null
-            ? const drift.Value.absent()
-            : drift.Value(_localImagePath),
-        source: drift.Value(barcode.isEmpty ? 'manual' : 'lookup_or_manual'),
-      ),
-    );
-
-    for (final _DraftBatch batch in _batches) {
-      final int batchId = await batchRepository.createBatch(
-        ProductBatchesCompanion.insert(
-          productId: productId,
-          buyDate: drift.Value(batch.buyDate),
-          expiryDate: batch.expiryDate,
-          quantity: drift.Value(batch.quantity),
+        barcode: barcode,
+        category: category,
+        defaultImagePath: _localImagePath,
+      );
+    } else if (_editingProduct != null) {
+      await productRepository.updateProduct(
+        _editingProduct!.copyWith(
+          canonicalName: name,
+          barcode: drift.Value<String?>(barcode.isEmpty ? null : barcode),
+          category: category,
+          defaultImagePath: drift.Value<String?>(_localImagePath),
+          updatedAt: DateTime.now(),
         ),
       );
 
-      await notificationService.scheduleExpiryNotification(
-        notificationId: batchId,
-        title: 'Expiry reminder',
-        body: '$name expires soon',
-        expiryDate: batch.expiryDate,
-        daysBefore: batch.notifDaysBefore,
-        hhmm: batch.notifTime,
+      await catalogRepository.upsertCatalogItem(
+        canonicalName: name,
+        barcode: barcode,
+        category: category,
+        defaultImagePath: _localImagePath,
       );
-    }
 
-    if (_localImagePath != null) {
-      await db.into(db.productImages).insert(
-            ProductImagesCompanion.insert(
-              productId: productId,
-              barcode: barcode.isEmpty
-                  ? const drift.Value.absent()
-                  : drift.Value(barcode),
-              localPath: _localImagePath!,
-            ),
-          );
+      // Product edit supports batch editing: replace existing batches with draft rows.
+      final List<ProductBatch> existingBatches = await batchRepository
+          .getBatchesByProduct(_editingProduct!.id);
+      for (final ProductBatch existing in existingBatches) {
+        await batchRepository.deleteBatch(existing.id);
+        unawaited(notificationService.cancelNotification(existing.id));
+      }
+
+      for (final _DraftBatch batch in _batches) {
+        final int batchId = await batchRepository.createBatch(
+          ProductBatchesCompanion.insert(
+            productId: _editingProduct!.id,
+            buyDate: drift.Value(batch.buyDate),
+            expiryDate: batch.expiryDate,
+            quantity: drift.Value(batch.quantity),
+            notificationDaysBefore: drift.Value(batch.notifDaysBefore),
+            notificationTimeLocal: drift.Value(batch.notifTime),
+          ),
+        );
+
+        unawaited(notificationService.scheduleExpiryNotification(
+          notificationId: batchId,
+          title: 'Expiry reminder',
+          body: '$name expires soon',
+          expiryDate: batch.expiryDate,
+          daysBefore: batch.notifDaysBefore,
+          hhmm: batch.notifTime,
+        ));
+      }
+    } else {
+      final int productId = await productRepository.createProduct(
+        ProductsCompanion.insert(
+          canonicalName: name,
+          barcode:
+              barcode.isEmpty ? const drift.Value.absent() : drift.Value(barcode),
+          category: drift.Value(category),
+          defaultImagePath: _localImagePath == null
+              ? const drift.Value.absent()
+              : drift.Value(_localImagePath),
+          source: drift.Value(barcode.isEmpty ? 'manual' : 'lookup_or_manual'),
+        ),
+      );
+
+      await catalogRepository.upsertCatalogItem(
+        canonicalName: name,
+        barcode: barcode,
+        category: category,
+        defaultImagePath: _localImagePath,
+      );
+
+      for (final _DraftBatch batch in _batches) {
+        final int batchId = await batchRepository.createBatch(
+          ProductBatchesCompanion.insert(
+            productId: productId,
+            buyDate: drift.Value(batch.buyDate),
+            expiryDate: batch.expiryDate,
+            quantity: drift.Value(batch.quantity),
+            notificationDaysBefore: drift.Value(batch.notifDaysBefore),
+            notificationTimeLocal: drift.Value(batch.notifTime),
+          ),
+        );
+
+        unawaited(notificationService.scheduleExpiryNotification(
+          notificationId: batchId,
+          title: 'Expiry reminder',
+          body: '$name expires soon',
+          expiryDate: batch.expiryDate,
+          daysBefore: batch.notifDaysBefore,
+          hhmm: batch.notifTime,
+        ));
+      }
+
+      if (_localImagePath != null) {
+        await db.into(db.productImages).insert(
+              ProductImagesCompanion.insert(
+                productId: productId,
+                barcode: barcode.isEmpty
+                    ? const drift.Value.absent()
+                    : drift.Value(barcode),
+                localPath: _localImagePath!,
+              ),
+            );
+      }
     }
 
     if (!mounted) {
@@ -319,6 +487,15 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingInitialData) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('product_action_edit'.tr()),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final double textScale = MediaQuery.textScalerOf(context).scale(1).clamp(
           1,
           1.25,
@@ -327,7 +504,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('add_product_title'.tr()),
+        title: Text(_isEditMode ? 'product_action_edit'.tr() : 'add_product_title'.tr()),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _scanBarcode,
@@ -421,12 +598,12 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
               const SizedBox(height: 16),
               ProductAutocompleteField(
                 controller: _nameController,
-                search: ref.read(productRepositoryProvider).autocompleteByName,
-                onSelected: (Product product) {
-                  _categoryController.text = product.category;
-                  if ((product.defaultImagePath ?? '').isNotEmpty) {
+                search: ref.read(catalogRepositoryProvider).autocompleteByName,
+                onSelected: (CatalogItem item) {
+                  _categoryController.text = item.category;
+                  if ((item.defaultImagePath ?? '').isNotEmpty) {
                     setState(() {
-                      _localImagePath = product.defaultImagePath;
+                      _localImagePath = item.defaultImagePath;
                     });
                   }
                 },
@@ -456,160 +633,162 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                       .toList(growable: false),
                 ),
               ],
-              const SizedBox(height: 12),
-              Text(
-                'add_product_batches_header'.tr(),
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                textScaler: TextScaler.linear(textScale),
-              ),
-              const SizedBox(height: 8),
-              ..._batches.asMap().entries.map((MapEntry<int, _DraftBatch> entry) {
-                final int index = entry.key;
-                final _DraftBatch batch = entry.value;
-                final DateFormat dateFmt =
-                    DateFormat.yMd(context.locale.toString());
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: <Widget>[
-                            Text('add_product_batch_label'.tr(
-                              namedArgs: <String, String>{'n': '${index + 1}'},
-                            ), textScaler: TextScaler.linear(textScale)),
-                            Wrap(
-                              spacing: 4,
-                              children: <Widget>[
-                                IconButton(
-                                  tooltip:
-                                      'add_product_duplicate_batch_tooltip'
-                                          .tr(),
-                                  onPressed: () => _duplicateBatch(index),
-                                  icon: const Icon(Icons.copy_outlined),
-                                ),
-                                IconButton(
-                                  tooltip:
-                                      'add_product_remove_batch_tooltip'.tr(),
-                                  onPressed: () => _removeBatch(index),
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: <Widget>[
-                            Text('add_product_quantity'.tr()),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () => _changeQuantity(index, -1),
-                              icon: const Icon(Icons.remove_circle_outline),
-                            ),
-                            Text('${batch.quantity}'),
-                            IconButton(
-                              onPressed: () => _changeQuantity(index, 1),
-                              icon: const Icon(Icons.add_circle_outline),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    _pickDate(index: index, isExpiry: false),
-                                child: Text(
-                                  'add_product_buy_date'.tr(namedArgs: <String,
-                                      String>{
-                                    'date': dateFmt
-                                        .format(batch.buyDate.toLocal()),
-                                  }),
-                                  textScaler: TextScaler.linear(textScale),
+              if (!_isCatalogOnlyEdit) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  'add_product_batches_header'.tr(),
+                  style:
+                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  textScaler: TextScaler.linear(textScale),
+                ),
+                const SizedBox(height: 8),
+                ..._batches.asMap().entries.map((MapEntry<int, _DraftBatch> entry) {
+                  final int index = entry.key;
+                  final _DraftBatch batch = entry.value;
+                  final DateFormat dateFmt =
+                      DateFormat.yMd(context.locale.toString());
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: <Widget>[
+                              Text('add_product_batch_label'.tr(
+                                namedArgs: <String, String>{'n': '${index + 1}'},
+                              ), textScaler: TextScaler.linear(textScale)),
+                              Wrap(
+                                spacing: 4,
+                                children: <Widget>[
+                                  IconButton(
+                                    tooltip:
+                                        'add_product_duplicate_batch_tooltip'
+                                            .tr(),
+                                    onPressed: () => _duplicateBatch(index),
+                                    icon: const Icon(Icons.copy_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip:
+                                        'add_product_remove_batch_tooltip'.tr(),
+                                    onPressed: () => _removeBatch(index),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: <Widget>[
+                              Text('add_product_quantity'.tr()),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: () => _changeQuantity(index, -1),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              Text('${batch.quantity}'),
+                              IconButton(
+                                onPressed: () => _changeQuantity(index, 1),
+                                icon: const Icon(Icons.add_circle_outline),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      _pickDate(index: index, isExpiry: false),
+                                  child: Text(
+                                    'add_product_buy_date'.tr(namedArgs: <String,
+                                        String>{
+                                      'date': dateFmt
+                                          .format(batch.buyDate.toLocal()),
+                                    }),
+                                    textScaler: TextScaler.linear(textScale),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () =>
-                                    _pickDate(index: index, isExpiry: true),
-                                child: Text(
-                                  'add_product_expiry_date'.tr(namedArgs: <String,
-                                      String>{
-                                    'date': dateFmt
-                                        .format(batch.expiryDate.toLocal()),
-                                  }),
-                                  textScaler: TextScaler.linear(textScale),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      _pickDate(index: index, isExpiry: true),
+                                  child: Text(
+                                    'add_product_expiry_date'.tr(namedArgs: <String,
+                                        String>{
+                                      'date': dateFmt
+                                          .format(batch.expiryDate.toLocal()),
+                                    }),
+                                    textScaler: TextScaler.linear(textScale),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: <Widget>[
-                            const Icon(Icons.notifications_outlined, size: 16),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              iconSize: 18,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _changeNotifDays(index, -1),
-                              icon: const Icon(Icons.remove_circle_outline),
-                            ),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                              child: Text('add_product_notif_days'.tr(
-                                namedArgs: <String, String>{
-                                  'days': '${batch.notifDaysBefore}',
-                                },
-                              ), textScaler: TextScaler.linear(textScale)),
-                            ),
-                            IconButton(
-                              iconSize: 18,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _changeNotifDays(index, 1),
-                              icon: const Icon(Icons.add_circle_outline),
-                            ),
-                            const SizedBox(width: 12),
-                            TextButton(
-                              onPressed: () => _pickNotifTime(index),
-                              child: Text('add_product_notif_at'.tr(
-                                namedArgs: <String, String>{
-                                  'time': batch.notifTime,
-                                },
-                              ), textScaler: TextScaler.linear(textScale)),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: <Widget>[
+                              const Icon(Icons.notifications_outlined, size: 16),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                iconSize: 18,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _changeNotifDays(index, -1),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text('add_product_notif_days'.tr(
+                                  namedArgs: <String, String>{
+                                    'days': '${batch.notifDaysBefore}',
+                                  },
+                                ), textScaler: TextScaler.linear(textScale)),
+                              ),
+                              IconButton(
+                                iconSize: 18,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _changeNotifDays(index, 1),
+                                icon: const Icon(Icons.add_circle_outline),
+                              ),
+                              const SizedBox(width: 12),
+                              TextButton(
+                                onPressed: () => _pickNotifTime(index),
+                                child: Text('add_product_notif_at'.tr(
+                                  namedArgs: <String, String>{
+                                    'time': batch.notifTime,
+                                  },
+                                ), textScaler: TextScaler.linear(textScale)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      final _DraftBatch last = _batches.last;
+                      setState(() {
+                        _batches.add(last.copyWith());
+                      });
+                    },
+                    icon: const Icon(Icons.add),
+                    label: Text(
+                      'add_product_add_batch'.tr(),
+                      textScaler: TextScaler.linear(textScale),
                     ),
                   ),
-                );
-              }),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () {
-                    final _DraftBatch last = _batches.last;
-                    setState(() {
-                      _batches.add(last.copyWith());
-                    });
-                  },
-                  icon: const Icon(Icons.add),
-                  label: Text(
-                    'add_product_add_batch'.tr(),
-                    textScaler: TextScaler.linear(textScale),
-                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 24),
             ],
           ),

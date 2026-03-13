@@ -2453,6 +2453,468 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }
 }
 
+class $CatalogItemsTable extends CatalogItems
+    with TableInfo<$CatalogItemsTable, CatalogItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CatalogItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _canonicalNameMeta = const VerificationMeta(
+    'canonicalName',
+  );
+  @override
+  late final GeneratedColumn<String> canonicalName = GeneratedColumn<String>(
+    'canonical_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _barcodeMeta = const VerificationMeta(
+    'barcode',
+  );
+  @override
+  late final GeneratedColumn<String> barcode = GeneratedColumn<String>(
+    'barcode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('unknown'),
+  );
+  static const VerificationMeta _defaultImagePathMeta = const VerificationMeta(
+    'defaultImagePath',
+  );
+  @override
+  late final GeneratedColumn<String> defaultImagePath = GeneratedColumn<String>(
+    'default_image_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    canonicalName,
+    barcode,
+    category,
+    defaultImagePath,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'catalog_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CatalogItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('canonical_name')) {
+      context.handle(
+        _canonicalNameMeta,
+        canonicalName.isAcceptableOrUnknown(
+          data['canonical_name']!,
+          _canonicalNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_canonicalNameMeta);
+    }
+    if (data.containsKey('barcode')) {
+      context.handle(
+        _barcodeMeta,
+        barcode.isAcceptableOrUnknown(data['barcode']!, _barcodeMeta),
+      );
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('default_image_path')) {
+      context.handle(
+        _defaultImagePathMeta,
+        defaultImagePath.isAcceptableOrUnknown(
+          data['default_image_path']!,
+          _defaultImagePathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CatalogItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CatalogItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      canonicalName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}canonical_name'],
+      )!,
+      barcode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}barcode'],
+      ),
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      defaultImagePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}default_image_path'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CatalogItemsTable createAlias(String alias) {
+    return $CatalogItemsTable(attachedDatabase, alias);
+  }
+}
+
+class CatalogItem extends DataClass implements Insertable<CatalogItem> {
+  final int id;
+  final String canonicalName;
+  final String? barcode;
+  final String category;
+  final String? defaultImagePath;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const CatalogItem({
+    required this.id,
+    required this.canonicalName,
+    this.barcode,
+    required this.category,
+    this.defaultImagePath,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['canonical_name'] = Variable<String>(canonicalName);
+    if (!nullToAbsent || barcode != null) {
+      map['barcode'] = Variable<String>(barcode);
+    }
+    map['category'] = Variable<String>(category);
+    if (!nullToAbsent || defaultImagePath != null) {
+      map['default_image_path'] = Variable<String>(defaultImagePath);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CatalogItemsCompanion toCompanion(bool nullToAbsent) {
+    return CatalogItemsCompanion(
+      id: Value(id),
+      canonicalName: Value(canonicalName),
+      barcode: barcode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(barcode),
+      category: Value(category),
+      defaultImagePath: defaultImagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(defaultImagePath),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CatalogItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CatalogItem(
+      id: serializer.fromJson<int>(json['id']),
+      canonicalName: serializer.fromJson<String>(json['canonicalName']),
+      barcode: serializer.fromJson<String?>(json['barcode']),
+      category: serializer.fromJson<String>(json['category']),
+      defaultImagePath: serializer.fromJson<String?>(json['defaultImagePath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'canonicalName': serializer.toJson<String>(canonicalName),
+      'barcode': serializer.toJson<String?>(barcode),
+      'category': serializer.toJson<String>(category),
+      'defaultImagePath': serializer.toJson<String?>(defaultImagePath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CatalogItem copyWith({
+    int? id,
+    String? canonicalName,
+    Value<String?> barcode = const Value.absent(),
+    String? category,
+    Value<String?> defaultImagePath = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => CatalogItem(
+    id: id ?? this.id,
+    canonicalName: canonicalName ?? this.canonicalName,
+    barcode: barcode.present ? barcode.value : this.barcode,
+    category: category ?? this.category,
+    defaultImagePath: defaultImagePath.present
+        ? defaultImagePath.value
+        : this.defaultImagePath,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CatalogItem copyWithCompanion(CatalogItemsCompanion data) {
+    return CatalogItem(
+      id: data.id.present ? data.id.value : this.id,
+      canonicalName: data.canonicalName.present
+          ? data.canonicalName.value
+          : this.canonicalName,
+      barcode: data.barcode.present ? data.barcode.value : this.barcode,
+      category: data.category.present ? data.category.value : this.category,
+      defaultImagePath: data.defaultImagePath.present
+          ? data.defaultImagePath.value
+          : this.defaultImagePath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogItem(')
+          ..write('id: $id, ')
+          ..write('canonicalName: $canonicalName, ')
+          ..write('barcode: $barcode, ')
+          ..write('category: $category, ')
+          ..write('defaultImagePath: $defaultImagePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    canonicalName,
+    barcode,
+    category,
+    defaultImagePath,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CatalogItem &&
+          other.id == this.id &&
+          other.canonicalName == this.canonicalName &&
+          other.barcode == this.barcode &&
+          other.category == this.category &&
+          other.defaultImagePath == this.defaultImagePath &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CatalogItemsCompanion extends UpdateCompanion<CatalogItem> {
+  final Value<int> id;
+  final Value<String> canonicalName;
+  final Value<String?> barcode;
+  final Value<String> category;
+  final Value<String?> defaultImagePath;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const CatalogItemsCompanion({
+    this.id = const Value.absent(),
+    this.canonicalName = const Value.absent(),
+    this.barcode = const Value.absent(),
+    this.category = const Value.absent(),
+    this.defaultImagePath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  CatalogItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required String canonicalName,
+    this.barcode = const Value.absent(),
+    this.category = const Value.absent(),
+    this.defaultImagePath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : canonicalName = Value(canonicalName);
+  static Insertable<CatalogItem> custom({
+    Expression<int>? id,
+    Expression<String>? canonicalName,
+    Expression<String>? barcode,
+    Expression<String>? category,
+    Expression<String>? defaultImagePath,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (canonicalName != null) 'canonical_name': canonicalName,
+      if (barcode != null) 'barcode': barcode,
+      if (category != null) 'category': category,
+      if (defaultImagePath != null) 'default_image_path': defaultImagePath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  CatalogItemsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? canonicalName,
+    Value<String?>? barcode,
+    Value<String>? category,
+    Value<String?>? defaultImagePath,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return CatalogItemsCompanion(
+      id: id ?? this.id,
+      canonicalName: canonicalName ?? this.canonicalName,
+      barcode: barcode ?? this.barcode,
+      category: category ?? this.category,
+      defaultImagePath: defaultImagePath ?? this.defaultImagePath,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (canonicalName.present) {
+      map['canonical_name'] = Variable<String>(canonicalName.value);
+    }
+    if (barcode.present) {
+      map['barcode'] = Variable<String>(barcode.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (defaultImagePath.present) {
+      map['default_image_path'] = Variable<String>(defaultImagePath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('canonicalName: $canonicalName, ')
+          ..write('barcode: $barcode, ')
+          ..write('category: $category, ')
+          ..write('defaultImagePath: $defaultImagePath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2462,6 +2924,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LookupCacheTable lookupCache = $LookupCacheTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
+  late final $CatalogItemsTable catalogItems = $CatalogItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2473,6 +2936,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     lookupCache,
     appSettings,
     categories,
+    catalogItems,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4236,6 +4700,242 @@ typedef $$CategoriesTableProcessedTableManager =
       Category,
       PrefetchHooks Function()
     >;
+typedef $$CatalogItemsTableCreateCompanionBuilder =
+    CatalogItemsCompanion Function({
+      Value<int> id,
+      required String canonicalName,
+      Value<String?> barcode,
+      Value<String> category,
+      Value<String?> defaultImagePath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$CatalogItemsTableUpdateCompanionBuilder =
+    CatalogItemsCompanion Function({
+      Value<int> id,
+      Value<String> canonicalName,
+      Value<String?> barcode,
+      Value<String> category,
+      Value<String?> defaultImagePath,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+class $$CatalogItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $CatalogItemsTable> {
+  $$CatalogItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get barcode => $composableBuilder(
+    column: $table.barcode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get defaultImagePath => $composableBuilder(
+    column: $table.defaultImagePath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CatalogItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CatalogItemsTable> {
+  $$CatalogItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get barcode => $composableBuilder(
+    column: $table.barcode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get defaultImagePath => $composableBuilder(
+    column: $table.defaultImagePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CatalogItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CatalogItemsTable> {
+  $$CatalogItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get canonicalName => $composableBuilder(
+    column: $table.canonicalName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get barcode =>
+      $composableBuilder(column: $table.barcode, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get defaultImagePath => $composableBuilder(
+    column: $table.defaultImagePath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CatalogItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CatalogItemsTable,
+          CatalogItem,
+          $$CatalogItemsTableFilterComposer,
+          $$CatalogItemsTableOrderingComposer,
+          $$CatalogItemsTableAnnotationComposer,
+          $$CatalogItemsTableCreateCompanionBuilder,
+          $$CatalogItemsTableUpdateCompanionBuilder,
+          (
+            CatalogItem,
+            BaseReferences<_$AppDatabase, $CatalogItemsTable, CatalogItem>,
+          ),
+          CatalogItem,
+          PrefetchHooks Function()
+        > {
+  $$CatalogItemsTableTableManager(_$AppDatabase db, $CatalogItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CatalogItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CatalogItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CatalogItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> canonicalName = const Value.absent(),
+                Value<String?> barcode = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String?> defaultImagePath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => CatalogItemsCompanion(
+                id: id,
+                canonicalName: canonicalName,
+                barcode: barcode,
+                category: category,
+                defaultImagePath: defaultImagePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String canonicalName,
+                Value<String?> barcode = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String?> defaultImagePath = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => CatalogItemsCompanion.insert(
+                id: id,
+                canonicalName: canonicalName,
+                barcode: barcode,
+                category: category,
+                defaultImagePath: defaultImagePath,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CatalogItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CatalogItemsTable,
+      CatalogItem,
+      $$CatalogItemsTableFilterComposer,
+      $$CatalogItemsTableOrderingComposer,
+      $$CatalogItemsTableAnnotationComposer,
+      $$CatalogItemsTableCreateCompanionBuilder,
+      $$CatalogItemsTableUpdateCompanionBuilder,
+      (
+        CatalogItem,
+        BaseReferences<_$AppDatabase, $CatalogItemsTable, CatalogItem>,
+      ),
+      CatalogItem,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4252,4 +4952,6 @@ class $AppDatabaseManager {
       $$AppSettingsTableTableManager(_db, _db.appSettings);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
+  $$CatalogItemsTableTableManager get catalogItems =>
+      $$CatalogItemsTableTableManager(_db, _db.catalogItems);
 }

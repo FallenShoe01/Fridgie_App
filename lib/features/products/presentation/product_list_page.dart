@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
@@ -21,6 +22,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   ProductSort _sort = ProductSort.expiryAsc;
   int _topViewIndex = 0;
   String? _statusFilter;
+  late Future<List<ProductListItem>> _listFuture;
 
   @override
   void initState() {
@@ -30,8 +32,25 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final String? initial = ref.read(productStatusFilterProvider);
     if (initial != null) {
       _statusFilter = initial;
-      ref.read(productStatusFilterProvider.notifier).state = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Clear the one-shot status filter after the first frame so we don't
+        // modify providers during widget lifecycle methods (initState/build).
+        if (mounted) {
+          ref.read(productStatusFilterProvider.notifier).state = null;
+        }
+      });
     }
+    _listFuture = ref.read(productRepositoryProvider).getProductList(
+      sort: _sort,
+      status: _statusFilter,
+    );
+  }
+
+  void _refreshList() {
+    _listFuture = ref.read(productRepositoryProvider).getProductList(
+      sort: _sort,
+      status: _statusFilter,
+    );
   }
 
   Future<void> _loadSortPref() async {
@@ -40,7 +59,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           ..where((AppSettings tbl) => tbl.key.equals('default_sort')))
         .getSingleOrNull();
     if (row != null && mounted) {
-      setState(() => _sort = _parseSortKey(row.value));
+      setState(() {
+        _sort = _parseSortKey(row.value);
+        _refreshList();
+      });
     }
   }
 
@@ -72,50 +94,51 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _deleteProduct(ProductListItem item) async {
-    final batchRepository = ref.read(batchRepositoryProvider);
     final productRepository = ref.read(productRepositoryProvider);
     final notificationService = ref.read(notificationServiceProvider);
+    final batchRepository = ref.read(batchRepositoryProvider);
 
-    final List<ProductBatch> batches =
-        await batchRepository.getBatchesByProduct(item.product.id);
-    for (final ProductBatch batch in batches) {
-      await notificationService.cancelNotification(batch.id);
-    }
+    // Delete the product first (cascade removes batches in DB).
     await productRepository.deleteProduct(item.product.id);
+
+    // Cancel notifications in the background — don't block the delete.
+    batchRepository.getBatchesByProduct(item.product.id).then((batches) {
+      for (final ProductBatch batch in batches) {
+        unawaited(notificationService.cancelNotification(batch.id));
+      }
+    }).ignore();
   }
 
   Future<void> _editProduct(Product product) async {
     final bool? edited =
         await context.push<bool>('/edit-product?id=${product.id}');
-    if (edited == true && mounted) setState(() {});
+    if (edited == true && mounted) setState(_refreshList);
   }
 
   Future<void> _markEaten(Product product) async {
     await ref.read(productRepositoryProvider).markEaten(product.id);
-    if (mounted) setState(() {});
+    if (mounted) setState(_refreshList);
   }
 
   Future<void> _markTrash(Product product) async {
     await ref.read(productRepositoryProvider).markTrash(product.id);
-    if (mounted) setState(() {});
+    if (mounted) setState(_refreshList);
   }
 
   Future<void> _restoreActive(Product product) async {
     await ref.read(productRepositoryProvider).restoreActive(product.id);
-    if (mounted) setState(() {});
+    if (mounted) setState(_refreshList);
   }
 
   Future<void> _openAddProduct() async {
     final bool? added = await context.push<bool>('/add-product');
     if (added == true && mounted) {
-      setState(() {});
+      setState(_refreshList);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final productRepository = ref.read(productRepositoryProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: Text('nav_products'.tr()),
@@ -153,10 +176,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       ),
       body: _topViewIndex == 0
           ? FutureBuilder<List<ProductListItem>>(
-        future: productRepository.getProductList(
-          sort: _sort,
-          status: _statusFilter,
-        ),
+        future: _listFuture,
         builder: (BuildContext context, AsyncSnapshot<List<ProductListItem>> snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -179,22 +199,22 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                     _SortChip(
                       label: 'status_all'.tr(),
                       selected: _statusFilter == null,
-                      onTap: () => setState(() => _statusFilter = null),
+                      onTap: () => setState(() { _statusFilter = null; _refreshList(); }),
                     ),
                     _SortChip(
                       label: 'status_active'.tr(),
                       selected: _statusFilter == 'active',
-                      onTap: () => setState(() => _statusFilter = 'active'),
+                      onTap: () => setState(() { _statusFilter = 'active'; _refreshList(); }),
                     ),
                     _SortChip(
                       label: 'status_eaten'.tr(),
                       selected: _statusFilter == 'eaten',
-                      onTap: () => setState(() => _statusFilter = 'eaten'),
+                      onTap: () => setState(() { _statusFilter = 'eaten'; _refreshList(); }),
                     ),
                     _SortChip(
                       label: 'status_trash'.tr(),
                       selected: _statusFilter == 'trash',
-                      onTap: () => setState(() => _statusFilter = 'trash'),
+                      onTap: () => setState(() { _statusFilter = 'trash'; _refreshList(); }),
                     ),
                   ],
                 ),
@@ -282,7 +302,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                       ),
                       onDismissed: (DismissDirection direction) async {
                         await _deleteProduct(item);
-                        if (mounted) setState(() {});
+                        if (mounted) setState(_refreshList);
                       },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -349,8 +369,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
               ),
             ],
           );
-        },
-      )
+            },
+          )
           : const _CategoriesManager(),
     );
   }
@@ -358,6 +378,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   void _onSortChanged(ProductSort selected) {
     setState(() {
       _sort = selected;
+      _refreshList();
     });
     _saveSortPref(selected);
   }

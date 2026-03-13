@@ -99,6 +99,22 @@ class Categories extends Table {
       integer().withDefault(const Constant(7))();
 }
 
+class CatalogItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get canonicalName => text()();
+
+  TextColumn get barcode => text().nullable()();
+
+  TextColumn get category => text().withDefault(const Constant('unknown'))();
+
+  TextColumn get defaultImagePath => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 @DriftDatabase(
   tables: <Type>[
     Products,
@@ -107,13 +123,14 @@ class Categories extends Table {
     LookupCache,
     AppSettings,
     Categories,
+    CatalogItems,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -135,6 +152,12 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_lookup_cache_barcode ON lookup_cache(barcode);',
       );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_catalog_items_name ON catalog_items(canonical_name);',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_catalog_items_barcode ON catalog_items(barcode);',
+      );
 
       await _seedDefaultSettings();
     },
@@ -149,6 +172,24 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await m.createTable(categories);
+      }
+      if (from < 4) {
+        await m.createTable(catalogItems);
+        await customStatement(
+          '''
+          INSERT INTO catalog_items (canonical_name, barcode, category, default_image_path, created_at, updated_at)
+          SELECT p.canonical_name, p.barcode, p.category, p.default_image_path, p.created_at, p.updated_at
+          FROM products p
+          WHERE TRIM(p.canonical_name) != ''
+          GROUP BY p.canonical_name
+          ''',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_catalog_items_name ON catalog_items(canonical_name);',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_catalog_items_barcode ON catalog_items(barcode);',
+        );
       }
     },
   );

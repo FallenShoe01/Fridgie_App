@@ -22,6 +22,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isLoading = true;
   final TextEditingController _daysCtrl = TextEditingController();
+  final TextEditingController _expiringDaysCtrl = TextEditingController();
   final TextEditingController _timeCtrl = TextEditingController();
   bool _isCheckingUpdate = false;
   String? _updateMsg;
@@ -38,6 +39,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void dispose() {
     _daysCtrl.dispose();
+    _expiringDaysCtrl.dispose();
     _timeCtrl.dispose();
     super.dispose();
   }
@@ -51,6 +53,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (!mounted) return;
     setState(() {
       _daysCtrl.text = map['default_notification_days_before'] ?? '3';
+      _expiringDaysCtrl.text = map['main_expiring_soon_days'] ?? '3';
       _timeCtrl.text = map['default_notification_time_local'] ?? '09:00';
       _themeMode = _themeModeFromString(map['ui_theme_mode']);
       _accent = accentFromString(map['ui_accent'] ?? 'teal');
@@ -65,6 +68,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       AppSettingsCompanion(
         key: const drift.Value('default_notification_days_before'),
         value: drift.Value(_daysCtrl.text.trim()),
+      ),
+      AppSettingsCompanion(
+        key: const drift.Value('main_expiring_soon_days'),
+        value: drift.Value(_expiringDaysCtrl.text.trim()),
       ),
       AppSettingsCompanion(
         key: const drift.Value('default_notification_time_local'),
@@ -289,12 +296,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     DropdownMenuItem<String>(value: 'en', child: Text('English')),
                     DropdownMenuItem<String>(value: 'uk', child: Text('Українська')),
                   ],
-                  onChanged: (String? value) {
+                  onChanged: (String? value) async {
                     if (value == null) return;
                     setState(() {
                       _localeCode = value;
                     });
-                    ref.read(settingsControllerProvider.notifier).setLocale(value);
+                    await context.setLocale(Locale(value));
+                    await ref
+                        .read(settingsControllerProvider.notifier)
+                        .setLocale(value);
                   },
                 ),
                 const SizedBox(height: 24),
@@ -327,6 +337,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: _expiringDaysCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'settings_expiring_days_label'.tr(),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Container()),
                   ],
                 ),
                 const SizedBox(height: 24),

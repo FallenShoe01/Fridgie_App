@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgie_app/app/settings_controller.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/backup/data/backup_service.dart';
+import 'package:fridgie_app/features/catalog/data/catalog_repository.dart';
 import 'package:fridgie_app/features/categories/data/category_preset_store.dart';
 import 'package:fridgie_app/features/images/data/image_service.dart';
 import 'package:fridgie_app/features/lookup/data/product_lookup_service.dart';
@@ -25,6 +26,11 @@ final dioProvider = Provider<Dio>((Ref ref) => Dio());
 final productRepositoryProvider =
     Provider<ProductRepository>((Ref ref) {
   return ProductRepository(ref.read(dbProvider));
+});
+
+final catalogRepositoryProvider =
+    Provider<CatalogRepository>((Ref ref) {
+  return CatalogRepository(ref.read(dbProvider));
 });
 
 final batchRepositoryProvider =
@@ -52,8 +58,12 @@ final productLookupServiceProvider =
   );
 });
 
+// Shared singleton plugin instance used across the app. Initialized from `main`.
+final FlutterLocalNotificationsPlugin notificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
 final notificationsPluginProvider = Provider<FlutterLocalNotificationsPlugin>(
-  (Ref ref) => FlutterLocalNotificationsPlugin(),
+  (Ref ref) => notificationsPlugin,
 );
 
 final notificationServiceProvider = Provider<NotificationService>((Ref ref) {

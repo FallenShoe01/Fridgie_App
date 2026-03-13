@@ -119,7 +119,7 @@ class ProductRepository {
         p.canonical_name,
         p.barcode,
         p.category,
-        p.default_image_path,
+        COALESCE(p.default_image_path, c.default_image_path) AS default_image_path,
         p.source,
         p.source_payload_json,
         p.status,
@@ -129,11 +129,12 @@ class ProductRepository {
         MIN(pb.expiry_date) AS nearest_expiry
       FROM products p
       LEFT JOIN product_batches pb ON pb.product_id = p.id
+      LEFT JOIN catalog_items c ON LOWER(c.canonical_name) = LOWER(p.canonical_name)
       $whereClause
       GROUP BY p.id
       ORDER BY $orderBy
       ''',
-      readsFrom: <ResultSetImplementation>{_db.products, _db.productBatches},
+      readsFrom: <ResultSetImplementation>{_db.products, _db.productBatches, _db.catalogItems},
     ).get();
 
     return rows.map((QueryRow row) {

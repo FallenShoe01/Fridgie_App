@@ -76,6 +76,13 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
           ),
         );
 
+    await ref.read(catalogRepositoryProvider).upsertCatalogItem(
+          canonicalName: _nameController.text.trim(),
+          barcode: _product!.barcode,
+          category: _categoryController.text.trim(),
+          defaultImagePath: _product!.defaultImagePath,
+        );
+
     if (mounted) {
       setState(() => _saving = false);
       context.pop(true);

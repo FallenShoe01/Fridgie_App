@@ -4,8 +4,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 
-typedef ProductSearch = Future<List<Product>> Function(String query);
-typedef ProductSelected = void Function(Product product);
+typedef ProductSearch = Future<List<CatalogItem>> Function(String query);
+typedef ProductSelected = void Function(CatalogItem item);
 
 class ProductAutocompleteField extends StatefulWidget {
   const ProductAutocompleteField({
@@ -26,7 +26,7 @@ class ProductAutocompleteField extends StatefulWidget {
 class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   final FocusNode _focusNode = FocusNode();
   Timer? _debounce;
-  List<Product> _suggestions = <Product>[];
+  List<CatalogItem> _suggestions = <CatalogItem>[];
   bool _suppressSuggestionsUntilEdit = false;
   String _selectedText = '';
 
@@ -52,7 +52,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
       if (currentText == _selectedText) {
         if (_suggestions.isNotEmpty && mounted) {
           setState(() {
-            _suggestions = <Product>[];
+            _suggestions = <CatalogItem>[];
           });
         }
         return;
@@ -68,12 +68,12 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           return;
         }
         setState(() {
-          _suggestions = <Product>[];
+          _suggestions = <CatalogItem>[];
         });
         return;
       }
 
-      final List<Product> results = await widget.search(query);
+      final List<CatalogItem> results = await widget.search(query);
       if (!mounted) {
         return;
       }
@@ -91,7 +91,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           return;
         }
         setState(() {
-          _suggestions = <Product>[];
+          _suggestions = <CatalogItem>[];
         });
       });
     }
@@ -122,7 +122,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
               shrinkWrap: true,
               itemCount: _suggestions.length,
               itemBuilder: (BuildContext context, int index) {
-                final Product item = _suggestions[index];
+                final CatalogItem item = _suggestions[index];
                 return ListTile(
                   dense: true,
                   title: Text(item.canonicalName),
@@ -135,7 +135,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
                     _selectedText = item.canonicalName;
                     _suppressSuggestionsUntilEdit = true;
                     setState(() {
-                      _suggestions = <Product>[];
+                      _suggestions = <CatalogItem>[];
                     });
                     widget.onSelected(item);
                   },
