@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgie_app/app/providers.dart';
+import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
 class BackupPage extends ConsumerStatefulWidget {
@@ -27,7 +30,29 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       final String zipPath =
           await ref.read(backupServiceProvider).createBackupZip();
       if (!mounted) return;
-      await Share.shareXFiles(<XFile>[XFile(zipPath)], text: 'Fridgie backup');
+
+      if (Platform.isAndroid) {
+        final File zipFile = File(zipPath);
+        final String fileName = p.basename(zipPath);
+        final String? savedPath = await FilePicker.platform.saveFile(
+          fileName: fileName,
+          type: FileType.custom,
+          allowedExtensions: <String>['zip'],
+          bytes: await zipFile.readAsBytes(),
+        );
+
+        if (savedPath == null) {
+          if (!mounted) return;
+          setState(() => _message = 'backup_cancel'.tr());
+          return;
+        }
+      } else {
+        await Share.shareXFiles(
+          <XFile>[XFile(zipPath)],
+          text: 'Fridgie backup',
+        );
+      }
+
       if (!mounted) return;
       setState(() => _message = 'backup_created'.tr());
     } catch (e) {

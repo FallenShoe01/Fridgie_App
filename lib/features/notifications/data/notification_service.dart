@@ -46,6 +46,23 @@ class NotificationService {
     _setFallbackLocationByOffset();
 
     await _plugin.initialize(settings);
+
+    final AndroidFlutterLocalNotificationsPlugin? android =
+        _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (android != null) {
+      await android.requestNotificationsPermission();
+      await android.requestExactAlarmsPermission();
+      await android.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'expiry_alerts',
+          'Expiry alerts',
+          description: 'Notifies users before product expiry dates',
+          importance: Importance.high,
+        ),
+      );
+    }
     _initialized = true;
   }
 

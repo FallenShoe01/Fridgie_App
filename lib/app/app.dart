@@ -54,7 +54,23 @@ class FridgieApp extends ConsumerWidget {
         }
 
         if (child == null) return const SizedBox.shrink();
-        return SafeArea(left: false, right: false, child: child);
+        final MediaQueryData media = MediaQuery.of(ctx);
+        final double width = media.size.width;
+        final double widthFactor = width < 360
+            ? 0.90
+            : width < 400
+                ? 0.95
+                : 1.0;
+        final double baseScale = media.textScaler.scale(1.0);
+        final double responsiveScale =
+            (baseScale * widthFactor).clamp(0.85, 2.0);
+
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: TextScaler.linear(responsiveScale),
+          ),
+          child: SafeArea(left: false, right: false, child: child),
+        );
       },
     );
   }

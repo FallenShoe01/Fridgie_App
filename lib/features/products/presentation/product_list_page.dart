@@ -30,6 +30,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   void initState() {
     super.initState();
     _loadSortPref();
+    _statusFilter = 'active';
     // One-shot: if the dashboard set a status filter, apply it immediately.
     final String? initial = ref.read(productStatusFilterProvider);
     if (initial != null) {
@@ -533,8 +534,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   children: <Widget>[
-                    const SizedBox(width: 48),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 36),
+                    const SizedBox(width: 8),
                     Expanded(
                       flex: 5,
                       child: InkWell(
@@ -548,7 +549,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         },
                         child: Row(
                           children: <Widget>[
-                            Text('table_header_name'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            Flexible(
+                              child: Text(
+                                'table_header_name'.tr(),
+                                style: Theme.of(context).textTheme.labelMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             if (_sort == ProductSort.nameAsc)
                               Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
@@ -602,20 +610,34 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         },
                         child: Row(
                           children: <Widget>[
-                            Text('table_header_category'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            Flexible(
+                              child: Text(
+                                'table_header_category'.tr(),
+                                style: Theme.of(context).textTheme.labelMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             if (_sort == ProductSort.categoryAsc)
                               Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
                             else if (_sort == ProductSort.categoryDesc)
                               Icon(Icons.arrow_downward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
                             else if (_categoryFilter != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(12),
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    _categoryFilter!,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                child: Text(_categoryFilter!, style: Theme.of(context).textTheme.bodySmall),
                               ),
                           ],
                         ),
@@ -635,7 +657,15 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: <Widget>[
-                            Text('table_header_expiry'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            Flexible(
+                              child: Text(
+                                'table_header_expiry'.tr(),
+                                style: Theme.of(context).textTheme.labelMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             if (_sort == ProductSort.expiryAsc)
                               Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
@@ -646,7 +676,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                       ),
                     ),
                     const SizedBox(
-                      width: 40,
+                      width: 32,
                       child: Align(
                         alignment: Alignment.center,
                         child: Icon(Icons.edit_outlined, size: 16),

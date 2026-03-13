@@ -93,6 +93,8 @@
   "background_reliability_intro": "Для надёжной доставки уведомлений разрешите фоновую работу и отключите агрессивную оптимизацию батареи.",
   "background_reliability_battery_button": "Настройки оптимизации батареи",
   "background_reliability_details_button": "Сведения о приложении",
+  "background_reliability_exact_alarm_button": "Настройки точных будильников",
+  "background_reliability_autostart_button": "Автозапуск MIUI",
   "background_reliability_xiaomi_title": "Советы для Xiaomi / MIUI",
   "background_reliability_xiaomi_body": "Настройки → Приложения → Fridgie → Экономия батареи → Без ограничений.\nТакже включите автозапуск: Безопасность → Автозапуск.",
 

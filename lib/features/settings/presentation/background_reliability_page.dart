@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 class BackgroundReliabilityPage extends StatelessWidget {
   const BackgroundReliabilityPage({super.key});
 
+  static const String _appPackage = 'com.fridgie_app';
+
   Future<void> _openBatteryOptimizationSettings() async {
     const AndroidIntent intent = AndroidIntent(
       action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
@@ -15,8 +17,42 @@ class BackgroundReliabilityPage extends StatelessWidget {
   Future<void> _openAppDetailsSettings() async {
     const AndroidIntent intent = AndroidIntent(
       action: 'android.settings.APPLICATION_DETAILS_SETTINGS',
+      data: 'package:$_appPackage',
     );
     await intent.launch();
+  }
+
+  Future<void> _openExactAlarmSettings() async {
+    try {
+      const AndroidIntent intent = AndroidIntent(
+        action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
+        data: 'package:$_appPackage',
+      );
+      await intent.launch();
+    } catch (_) {
+      try {
+        const AndroidIntent appNotifIntent = AndroidIntent(
+          action: 'android.settings.APP_NOTIFICATION_SETTINGS',
+          arguments: <String, dynamic>{
+            'android.provider.extra.APP_PACKAGE': _appPackage,
+          },
+        );
+        await appNotifIntent.launch();
+      } catch (_) {
+        await _openAppDetailsSettings();
+      }
+    }
+  }
+
+  Future<void> _openMiuiAutostartSettings() async {
+    try {
+      const AndroidIntent miuiIntent = AndroidIntent(
+        action: 'miui.intent.action.OP_AUTO_START',
+      );
+      await miuiIntent.launch();
+    } catch (_) {
+      await _openAppDetailsSettings();
+    }
   }
 
   @override
@@ -36,6 +72,16 @@ class BackgroundReliabilityPage extends StatelessWidget {
           FilledButton.tonal(
             onPressed: _openAppDetailsSettings,
             child: Text('background_reliability_details_button'.tr()),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonal(
+            onPressed: _openExactAlarmSettings,
+            child: Text('background_reliability_exact_alarm_button'.tr()),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonal(
+            onPressed: _openMiuiAutostartSettings,
+            child: Text('background_reliability_autostart_button'.tr()),
           ),
           const SizedBox(height: 16),
           Text(

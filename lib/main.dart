@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,10 +11,19 @@ import 'package:fridgie_app/features/notifications/data/notification_service.dar
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: <SystemUiOverlay>[
+      SystemUiOverlay.top,
+      SystemUiOverlay.bottom,
+    ],
+  );
   // Request runtime permissions used by the app (notifications, camera, photos/storage).
   try {
     await <Permission>[
       Permission.notification,
+      Permission.scheduleExactAlarm,
+      Permission.ignoreBatteryOptimizations,
       Permission.camera,
       Permission.photos,
       Permission.storage,

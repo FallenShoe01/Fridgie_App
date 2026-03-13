@@ -148,6 +148,8 @@
   "background_reliability_intro": "To improve notification delivery (including Xiaomi devices), allow background activity, disable aggressive battery optimization, and enable autostart for Fridgie.",
   "background_reliability_battery_button": "Open battery optimization settings",
   "background_reliability_details_button": "Open app details (enable autostart here)",
+  "background_reliability_exact_alarm_button": "Open exact alarm settings",
+  "background_reliability_autostart_button": "Open MIUI autostart settings",
   "background_reliability_xiaomi_title": "Xiaomi / MIUI tips",
   "background_reliability_xiaomi_body": "Go to Settings → Apps → Fridgie → Battery saver → No restrictions.\nAlso enable Autostart in Security → Autostart.",
 

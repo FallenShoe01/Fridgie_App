@@ -94,8 +94,8 @@ class _ImageCropperPageState extends State<ImageCropperPage> {
   @override
   Widget build(BuildContext context) {
     final ButtonStyle toolButtonStyle = OutlinedButton.styleFrom(
-      minimumSize: const Size.fromHeight(44),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      minimumSize: const Size(52, 44),
+      padding: EdgeInsets.zero,
     );
 
     return Scaffold(
@@ -151,86 +151,101 @@ class _ImageCropperPageState extends State<ImageCropperPage> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: toolButtonStyle,
-                      onPressed: _isCropping || _isTransforming
-                          ? null
-                          : () => _rotate(-90),
-                      icon: const Icon(Icons.rotate_left),
-                      label: Text(
-                        'image_cropper_rotate_left'.tr(),
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  Widget buildTool({
+                    required VoidCallback? onPressed,
+                    required IconData icon,
+                    required String tooltip,
+                  }) {
+                    return SizedBox(
+                      width: 52,
+                      child: Tooltip(
+                        message: tooltip,
+                        child: OutlinedButton(
+                        style: toolButtonStyle,
+                        onPressed: onPressed,
+                        child: Icon(
+                          icon,
+                          size: 20,
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: toolButtonStyle,
-                      onPressed: _isCropping || _isTransforming
-                          ? null
-                          : _reset,
-                      icon: const Icon(Icons.refresh),
-                      label: Text(
-                        'image_cropper_reset'.tr(),
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: toolButtonStyle,
-                      onPressed: _isCropping || _isTransforming
-                          ? null
-                          : () => _rotate(90),
-                      icon: const Icon(Icons.rotate_right),
-                      label: Text(
-                        'image_cropper_rotate_right'.tr(),
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
+                    );
+                  }
+
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: <Widget>[
+                      buildTool(
+                        onPressed: _isCropping || _isTransforming
+                            ? null
+                            : () => _rotate(-90),
+                        icon: Icons.rotate_left,
+                        tooltip: 'image_cropper_rotate_left'.tr(),
                       ),
-                    ),
-                  ),
-                ],
+                      buildTool(
+                        onPressed: _isCropping || _isTransforming
+                            ? null
+                            : _reset,
+                        icon: Icons.refresh,
+                        tooltip: 'image_cropper_reset'.tr(),
+                      ),
+                      buildTool(
+                        onPressed: _isCropping || _isTransforming
+                            ? null
+                            : () => _rotate(90),
+                        icon: Icons.rotate_right,
+                        tooltip: 'image_cropper_rotate_right'.tr(),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isCropping || _isTransforming
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: Text('image_cropper_cancel'.tr()),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _isCropping ? null : _crop,
-                      child: _isCropping
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text('image_cropper_done'.tr()),
-                    ),
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool compact = constraints.maxWidth < 340;
+                  final Widget cancelBtn = OutlinedButton(
+                    onPressed: _isCropping || _isTransforming
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: Text('image_cropper_cancel'.tr()),
+                  );
+                  final Widget doneBtn = FilledButton(
+                    onPressed: _isCropping ? null : _crop,
+                    child: _isCropping
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text('image_cropper_done'.tr()),
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        cancelBtn,
+                        const SizedBox(height: 8),
+                        doneBtn,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: <Widget>[
+                      Expanded(child: cancelBtn),
+                      const SizedBox(width: 12),
+                      Expanded(child: doneBtn),
+                    ],
+                  );
+                },
               ),
             ),
           ],
