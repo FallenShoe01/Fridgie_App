@@ -163,7 +163,7 @@ class NotificationService {
     // ignore: avoid_print
     print('NotificationService.computeScheduleTime: expiry(local)=$localExpiry, daysBefore=$daysBefore, hhmm=$hhmm, now=$now, triggerDate=$triggerDate');
 
-    final tz.TZDateTime scheduled = tz.TZDateTime(
+    tz.TZDateTime scheduled = tz.TZDateTime(
       tz.local,
       triggerDate.year,
       triggerDate.month,
@@ -171,6 +171,18 @@ class NotificationService {
       hour,
       minute,
     );
+
+    // If user saves at the same displayed minute (e.g. 11:33:57 for 11:33),
+    // keep the reminder by scheduling a few seconds in the future.
+    final bool sameMinuteAsNow =
+        scheduled.year == now.year &&
+        scheduled.month == now.month &&
+        scheduled.day == now.day &&
+        scheduled.hour == now.hour &&
+        scheduled.minute == now.minute;
+    if (scheduled.isBefore(now) && sameMinuteAsNow) {
+      scheduled = now.add(const Duration(seconds: 5));
+    }
 
     if (scheduled.isBefore(now)) {
       return null;

@@ -18,8 +18,9 @@ class CatalogRepository {
     }
 
     final String? normalizedBarcode = _normalizeNullable(barcode);
-    final String normalizedCategory =
-        category.trim().isEmpty ? 'unknown' : category.trim();
+    final String normalizedCategory = category.trim().isEmpty
+        ? 'unknown'
+        : category.trim();
     final String? normalizedImagePath = _normalizeNullable(defaultImagePath);
 
     final Selectable<CatalogItem> query = _db.select(_db.catalogItems)
@@ -28,7 +29,9 @@ class CatalogRepository {
 
     final CatalogItem? existing = await query.getSingleOrNull();
     if (existing == null) {
-      await _db.into(_db.catalogItems).insert(
+      await _db
+          .into(_db.catalogItems)
+          .insert(
             CatalogItemsCompanion.insert(
               canonicalName: name,
               barcode: Value<String?>(normalizedBarcode),
@@ -39,8 +42,9 @@ class CatalogRepository {
       return;
     }
 
-    await (_db.update(_db.catalogItems)..where((CatalogItems t) => t.id.equals(existing.id)))
-        .write(
+    await (_db.update(
+      _db.catalogItems,
+    )..where((CatalogItems t) => t.id.equals(existing.id))).write(
       CatalogItemsCompanion(
         barcode: Value<String?>(normalizedBarcode ?? existing.barcode),
         category: Value<String>(normalizedCategory),
@@ -55,20 +59,42 @@ class CatalogRepository {
   Future<List<CatalogItem>> autocompleteByName(
     String query, {
     int limit = 10,
-  }) {
-    final String needle = query.trim();
+  }) async {
+    final String needle = query.trim().toLowerCase();
     if (needle.isEmpty) {
-      return Future<List<CatalogItem>>.value(<CatalogItem>[]);
+      return <CatalogItem>[];
     }
 
-    final Selectable<CatalogItem> base = _db.select(_db.catalogItems)
-      ..where((CatalogItems tbl) => tbl.canonicalName.like('%$needle%'))
-      ..orderBy(<OrderingTerm Function(CatalogItems)>[
-        (CatalogItems tbl) => OrderingTerm.asc(tbl.canonicalName),
-      ])
-      ..limit(limit);
+    final List<QueryRow> rows = await _db
+        .customSelect(
+          '''
+      SELECT id, canonical_name, barcode, category, default_image_path, created_at, updated_at
+      FROM catalog_items
+      WHERE LOWER(canonical_name) LIKE ?
+      ORDER BY canonical_name ASC
+      LIMIT ?
+      ''',
+          variables: <Variable<Object>>[
+            Variable<String>('%$needle%'),
+            Variable<int>(limit),
+          ],
+          readsFrom: <ResultSetImplementation>{_db.catalogItems},
+        )
+        .get();
 
-    return base.get();
+    return rows
+        .map(
+          (QueryRow row) => CatalogItem(
+            id: row.read<int>('id'),
+            canonicalName: row.read<String>('canonical_name'),
+            barcode: row.readNullable<String>('barcode'),
+            category: row.read<String>('category'),
+            defaultImagePath: row.readNullable<String>('default_image_path'),
+            createdAt: row.read<DateTime>('created_at'),
+            updatedAt: row.read<DateTime>('updated_at'),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<List<CatalogItem>> getAllCatalogItems() {
@@ -86,6 +112,12 @@ class CatalogRepository {
     return query.getSingleOrNull();
   }
 
+  Future<void> deleteById(int id) {
+    return (_db.delete(
+      _db.catalogItems,
+    )..where((CatalogItems t) => t.id.equals(id))).go();
+  }
+
   Future<void> updateCatalogItem(
     CatalogItem item, {
     required String canonicalName,
@@ -94,14 +126,15 @@ class CatalogRepository {
     String? defaultImagePath,
   }) {
     final String normalizedName = canonicalName.trim();
-    final String normalizedCategory =
-        category.trim().isEmpty ? 'unknown' : category.trim();
+    final String normalizedCategory = category.trim().isEmpty
+        ? 'unknown'
+        : category.trim();
     final String? normalizedBarcode = _normalizeNullable(barcode);
     final String? normalizedImagePath = _normalizeNullable(defaultImagePath);
 
-    return (_db.update(_db.catalogItems)
-          ..where((CatalogItems t) => t.id.equals(item.id)))
-        .write(
+    return (_db.update(
+      _db.catalogItems,
+    )..where((CatalogItems t) => t.id.equals(item.id))).write(
       CatalogItemsCompanion(
         canonicalName: Value<String>(normalizedName),
         barcode: Value<String?>(normalizedBarcode),

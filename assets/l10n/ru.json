@@ -87,4 +87,7 @@
 
   "confirm_cancel": "Отмена",
   "confirm_ok": "OK"
+
+  ,"delete": "Удалить",
+  "delete_catalog_confirm": "Удалить элемент каталога? Это не удалит уже созданные товары."
 }

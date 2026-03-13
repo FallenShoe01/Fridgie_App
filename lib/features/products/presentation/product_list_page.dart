@@ -9,6 +9,7 @@ import 'package:fridgie_app/app/providers.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/categories/data/category_preset_store.dart';
 import 'package:fridgie_app/features/products/data/product_repository.dart';
+import 'package:fridgie_app/shared/top_snackbar.dart';
 import 'package:go_router/go_router.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
@@ -20,8 +21,8 @@ class ProductListPage extends ConsumerStatefulWidget {
 
 class _ProductListPageState extends ConsumerState<ProductListPage> {
   ProductSort _sort = ProductSort.expiryAsc;
-  int _topViewIndex = 0;
   String? _statusFilter;
+  String? _categoryFilter;
   late Future<List<ProductListItem>> _listFuture;
 
   @override
@@ -43,6 +44,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     _listFuture = ref.read(productRepositoryProvider).getProductList(
       sort: _sort,
       status: _statusFilter,
+      category: _categoryFilter,
     );
   }
 
@@ -50,6 +52,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     _listFuture = ref.read(productRepositoryProvider).getProductList(
       sort: _sort,
       status: _statusFilter,
+      category: _categoryFilter,
     );
   }
 
@@ -109,25 +112,127 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }).ignore();
   }
 
+  Future<void> _applyBatchAction(
+    ProductListItem item,
+    _BatchAction action,
+  ) async {
+    final batchRepository = ref.read(batchRepositoryProvider);
+    final notificationService = ref.read(notificationServiceProvider);
+
+    final List<ProductBatch> batches =
+        await batchRepository.getBatchesByProduct(item.product.id);
+    if (!mounted) {
+      return;
+    }
+
+    if (batches.isEmpty) {
+      showTopSnackBar(context, 'no_batches_for_product'.tr());
+      return;
+    }
+
+    final List<ProductBatch> sorted = List<ProductBatch>.from(batches)
+      ..sort((ProductBatch a, ProductBatch b) => a.expiryDate.compareTo(b.expiryDate));
+
+    final ProductBatch? selected = await showDialog<ProductBatch>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: Text(
+            action == _BatchAction.eaten
+                ? 'product_action_eaten'.tr()
+                : 'product_action_trash'.tr(),
+          ),
+          content: SizedBox(
+            width: 420,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: sorted.length,
+                separatorBuilder: (BuildContext _, int index) =>
+                  const Divider(height: 1),
+              itemBuilder: (BuildContext _, int index) {
+                final ProductBatch batch = sorted[index];
+                final String expiry = _formatDate(batch.expiryDate);
+                final String daysLeft = _daysUntilLabel(batch.expiryDate);
+                return ListTile(
+                  onTap: () => Navigator.of(ctx).pop(batch),
+                  title: Text(
+                    'add_product_batch_label'.tr(
+                      namedArgs: <String, String>{'n': '${index + 1}'},
+                    ),
+                  ),
+                  subtitle: Text(
+                    'batch_expiry_with_days'.tr(
+                      namedArgs: <String, String>{
+                        'date': expiry,
+                        'days': daysLeft,
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('confirm_cancel'.tr()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    await batchRepository.deleteBatch(selected.id);
+    unawaited(notificationService.cancelNotification(selected.id));
+
+    if (!mounted) {
+      return;
+    }
+
+    showTopSnackBar(
+      context,
+      action == _BatchAction.eaten
+          ? 'product_action_eaten'.tr()
+          : 'product_action_trash'.tr(),
+    );
+    setState(_refreshList);
+  }
+
+  Future<void> _confirmDeleteProduct(ProductListItem item) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+      title: Text('delete'.tr()),
+      content: Text('delete_product_confirm'.tr()),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('confirm_cancel'.tr()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('delete'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _deleteProduct(item);
+    if (mounted) {
+      setState(_refreshList);
+    }
+  }
+
   Future<void> _editProduct(Product product) async {
     final bool? edited =
         await context.push<bool>('/edit-product?id=${product.id}');
     if (edited == true && mounted) setState(_refreshList);
-  }
-
-  Future<void> _markEaten(Product product) async {
-    await ref.read(productRepositoryProvider).markEaten(product.id);
-    if (mounted) setState(_refreshList);
-  }
-
-  Future<void> _markTrash(Product product) async {
-    await ref.read(productRepositoryProvider).markTrash(product.id);
-    if (mounted) setState(_refreshList);
-  }
-
-  Future<void> _restoreActive(Product product) async {
-    await ref.read(productRepositoryProvider).restoreActive(product.id);
-    if (mounted) setState(_refreshList);
   }
 
   Future<void> _openAddProduct() async {
@@ -142,40 +247,13 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('nav_products'.tr()),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: SegmentedButton<int>(
-              segments: <ButtonSegment<int>>[
-                ButtonSegment<int>(
-                  value: 0,
-                  label: Text('nav_products'.tr()),
-                ),
-                ButtonSegment<int>(
-                  value: 1,
-                  label: Text('nav_categories'.tr()),
-                ),
-              ],
-              selected: <int>{_topViewIndex},
-              onSelectionChanged: (Set<int> values) {
-                setState(() {
-                  _topViewIndex = values.first;
-                });
-              },
-            ),
-          ),
-        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _topViewIndex == 0 ? _openAddProduct : null,
+        onPressed: _openAddProduct,
         icon: const Icon(Icons.add),
-        label: Text(
-          _topViewIndex == 0 ? 'nav_add'.tr() : 'category_add'.tr(),
-        ),
+        label: Text('nav_add'.tr()),
       ),
-      body: _topViewIndex == 0
-          ? FutureBuilder<List<ProductListItem>>(
+      body: FutureBuilder<List<ProductListItem>>(
         future: _listFuture,
         builder: (BuildContext context, AsyncSnapshot<List<ProductListItem>> snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -183,11 +261,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           }
 
           final List<ProductListItem> items = snapshot.data ?? <ProductListItem>[];
-          if (items.isEmpty) {
-            return Center(
-              child: Text('product_list_empty'.tr()),
-            );
-          }
 
           return Column(
             children: <Widget>[
@@ -219,34 +292,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                   ],
                 ),
               ),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                child: Row(
-                  children: <Widget>[
-                    _SortChip(
-                      label: 'product_list_sort_expiry_nearest'.tr(),
-                      selected: _sort == ProductSort.expiryAsc,
-                      onTap: () => _onSortChanged(ProductSort.expiryAsc),
-                    ),
-                    _SortChip(
-                      label: 'product_list_sort_expiry_latest'.tr(),
-                      selected: _sort == ProductSort.expiryDesc,
-                      onTap: () => _onSortChanged(ProductSort.expiryDesc),
-                    ),
-                    _SortChip(
-                      label: 'product_list_sort_name_az'.tr(),
-                      selected: _sort == ProductSort.nameAsc,
-                      onTap: () => _onSortChanged(ProductSort.nameAsc),
-                    ),
-                    _SortChip(
-                      label: 'product_list_sort_name_za'.tr(),
-                      selected: _sort == ProductSort.nameDesc,
-                      onTap: () => _onSortChanged(ProductSort.nameDesc),
-                    ),
-                  ],
-                ),
-              ),
+              // Removed top sort chips per UX update.
               Container(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -256,122 +302,210 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 5,
-                      child: Text(
-                        'table_header_name'.tr(),
-                        style: Theme.of(context).textTheme.labelMedium,
+                      child: InkWell(
+                        onTap: () {
+                          // Toggle name sort
+                          if (_sort == ProductSort.nameAsc) {
+                            _onSortChanged(ProductSort.nameDesc);
+                          } else {
+                            _onSortChanged(ProductSort.nameAsc);
+                          }
+                        },
+                        child: Row(
+                          children: <Widget>[
+                            Text('table_header_name'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            const SizedBox(width: 6),
+                            if (_sort == ProductSort.nameAsc)
+                              Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                            else if (_sort == ProductSort.nameDesc)
+                              Icon(Icons.arrow_downward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                          ],
+                        ),
                       ),
                     ),
                     Expanded(
                       flex: 3,
-                      child: Text(
-                        'table_header_category'.tr(),
-                        style: Theme.of(context).textTheme.labelMedium,
+                      child: GestureDetector(
+                        onTap: () {
+                          // Toggle category alphabetical sort
+                          if (_sort == ProductSort.categoryAsc) {
+                            _onSortChanged(ProductSort.categoryDesc);
+                          } else {
+                            _onSortChanged(ProductSort.categoryAsc);
+                          }
+                        },
+                        onLongPress: () async {
+                          // long-press opens category chooser
+                          final List<CategoryPreset> categories = await ref.read(categoryPresetStoreProvider).getAll();
+                          if (!context.mounted) {
+                            return;
+                          }
+                          final String? choice = await showDialog<String?>(
+                            context: context,
+                            builder: (BuildContext ctx) {
+                              return SimpleDialog(
+                                title: Text('table_header_category'.tr()),
+                                children: <Widget>[
+                                  SimpleDialogOption(
+                                    onPressed: () => Navigator.of(ctx).pop(null),
+                                    child: Text('status_all'.tr()),
+                                  ),
+                                  ...categories.map((CategoryPreset c) => SimpleDialogOption(
+                                    onPressed: () => Navigator.of(ctx).pop(c.name),
+                                    child: Text(c.name),
+                                  )),
+                                ],
+                              );
+                            },
+                          );
+                          if (mounted) {
+                            setState(() {
+                              _categoryFilter = choice;
+                              _refreshList();
+                            });
+                          }
+                        },
+                        child: Row(
+                          children: <Widget>[
+                            Text('table_header_category'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            const SizedBox(width: 6),
+                            if (_sort == ProductSort.categoryAsc)
+                              Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                            else if (_sort == ProductSort.categoryDesc)
+                              Icon(Icons.arrow_downward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                            else if (_categoryFilter != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(_categoryFilter!, style: Theme.of(context).textTheme.bodySmall),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     Expanded(
                       flex: 2,
-                      child: Text(
-                        'table_header_expiry'.tr(),
-                        style: Theme.of(context).textTheme.labelMedium,
-                        textAlign: TextAlign.end,
+                      child: InkWell(
+                        onTap: () {
+                          // Toggle expiry sort
+                          if (_sort == ProductSort.expiryAsc) {
+                            _onSortChanged(ProductSort.expiryDesc);
+                          } else {
+                            _onSortChanged(ProductSort.expiryAsc);
+                          }
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: <Widget>[
+                            Text('table_header_expiry'.tr(), style: Theme.of(context).textTheme.labelMedium),
+                            const SizedBox(width: 6),
+                            if (_sort == ProductSort.expiryAsc)
+                              Icon(Icons.arrow_upward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                            else if (_sort == ProductSort.expiryDesc)
+                              Icon(Icons.arrow_downward, size: 16, color: Theme.of(context).textTheme.labelMedium?.color)
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 40,
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: Icon(Icons.edit_outlined, size: 16),
                       ),
                     ),
                   ],
                 ),
               ),
               Expanded(
-                child: ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (BuildContext context, int index) =>
-                      const Divider(height: 1),
-                  itemBuilder: (BuildContext context, int index) {
-                    final ProductListItem item = items[index];
-                    final String daysLabel = _daysUntilLabel(item.nearestExpiry);
+                child: items.isEmpty
+                    ? Center(child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text('product_list_empty'.tr(), textAlign: TextAlign.center),
+                      ))
+                    : ListView.separated(
+                        itemCount: items.length,
+                        separatorBuilder: (BuildContext context, int index) =>
+                            const Divider(height: 1),
+                        itemBuilder: (BuildContext context, int index) {
+                          final ProductListItem item = items[index];
+                          final String daysLabel = _daysUntilLabel(item.nearestExpiry);
 
-                    return Dismissible(
-                      key: ValueKey<int>(item.product.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        color: Theme.of(context).colorScheme.error,
-                        child: Icon(
-                          Icons.delete_outline,
-                          color: Theme.of(context).colorScheme.onError,
-                        ),
-                      ),
-                      onDismissed: (DismissDirection direction) async {
-                        await _deleteProduct(item);
-                        if (mounted) setState(_refreshList);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            _ImageThumb(path: item.product.defaultImagePath),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 5,
-                              child: Text(item.product.canonicalName),
+                          return Dismissible(
+                            key: ValueKey<int>(item.product.id),
+                            direction: DismissDirection.horizontal,
+                            background: Container(
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              color: Colors.green,
+                              child: const Icon(Icons.restaurant_menu, color: Colors.white),
                             ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(item.product.category),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                daysLabel,
-                                textAlign: TextAlign.end,
+                            secondaryBackground: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              color: Theme.of(context).colorScheme.error,
+                              child: Icon(
+                                Icons.delete_sweep_outlined,
+                                color: Theme.of(context).colorScheme.onError,
                               ),
                             ),
-                            PopupMenuButton<String>(
-                              onSelected: (String value) {
-                                if (value == 'edit') {
-                                  _editProduct(item.product);
-                                } else if (value == 'eaten') {
-                                  _markEaten(item.product);
-                                } else if (value == 'trash') {
-                                  _markTrash(item.product);
-                                } else if (value == 'restore') {
-                                  _restoreActive(item.product);
-                                }
-                              },
-                              itemBuilder: (BuildContext context) =>
-                                  <PopupMenuEntry<String>>[
-                                PopupMenuItem<String>(
-                                  value: 'edit',
-                                  child: Text('product_action_edit'.tr()),
+                            confirmDismiss: (DismissDirection direction) async {
+                              if (direction == DismissDirection.startToEnd) {
+                                await _applyBatchAction(item, _BatchAction.eaten);
+                              } else if (direction == DismissDirection.endToStart) {
+                                await _applyBatchAction(item, _BatchAction.trash);
+                              }
+                              return false;
+                            },
+                            child: InkWell(
+                              onTap: () => _editProduct(item.product),
+                              onLongPress: () => _confirmDeleteProduct(item),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
                                 ),
-                                PopupMenuItem<String>(
-                                  value: 'eaten',
-                                  child: Text('product_action_eaten'.tr()),
+                                child: Row(
+                                  children: <Widget>[
+                                    _ImageThumb(path: item.product.defaultImagePath),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 5,
+                                      child: Text(item.product.canonicalName),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(item.product.category),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        daysLabel,
+                                        textAlign: TextAlign.end,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 40,
+                                      child: IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () => _editProduct(item.product),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                PopupMenuItem<String>(
-                                  value: 'trash',
-                                  child: Text('product_action_trash'.tr()),
-                                ),
-                                PopupMenuItem<String>(
-                                  value: 'restore',
-                                  child: Text('product_action_restore'.tr()),
-                                ),
-                              ],
+                              ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           );
-            },
-          )
-          : const _CategoriesManager(),
+        },
+      ),
     );
   }
 
@@ -399,7 +533,17 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
     return 'product_list_days_remaining'.tr(namedArgs: <String, String>{'days': '$days'});
   }
+
+  String _formatDate(DateTime date) {
+    final DateTime local = date.toLocal();
+    final String y = local.year.toString().padLeft(4, '0');
+    final String m = local.month.toString().padLeft(2, '0');
+    final String d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
 }
+
+enum _BatchAction { eaten, trash }
 
 class _ImageThumb extends StatelessWidget {
   const _ImageThumb({required this.path});
@@ -521,19 +665,11 @@ class _CategoriesManagerState extends ConsumerState<_CategoriesManager> {
     );
 
     if (ok == true) {
-      final List<CategoryPreset> current =
-          await ref.read(categoryPresetStoreProvider).getAll();
-      current.removeWhere(
-        (CategoryPreset item) =>
-            item.name.toLowerCase() == name.text.trim().toLowerCase(),
+      final CategoryPreset entry = CategoryPreset(
+        name: name.text.trim(),
+        defaultExpiryDays: int.tryParse(days.text.trim()) ?? 7,
       );
-      current.add(
-        CategoryPreset(
-          name: name.text.trim(),
-          defaultExpiryDays: int.tryParse(days.text.trim()) ?? 7,
-        ),
-      );
-      await ref.read(categoryPresetStoreProvider).saveAll(current);
+      await ref.read(categoryPresetStoreProvider).add(entry);
       await _refresh();
     }
 

@@ -94,7 +94,13 @@ class MainDashboardPage extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             if (expiringSoonItems.isEmpty)
-              Text('product_list_empty'.tr())
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'product_list_empty'.tr(),
+                  textAlign: TextAlign.center,
+                ),
+              )
             else
               ...expiringSoonItems.take(6).map((ProductListItem item) {
                 final DateTime? expiry = item.nearestExpiry;

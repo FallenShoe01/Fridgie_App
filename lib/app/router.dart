@@ -43,10 +43,14 @@ final GoRouter appRouter = GoRouter(
             int.tryParse(state.uri.queryParameters['editProductId'] ?? '');
         final int? editCatalogItemId =
             int.tryParse(state.uri.queryParameters['editCatalogItemId'] ?? '');
+        final String? catalogOnlyRaw = state.uri.queryParameters['catalogOnly'];
+        final bool catalogOnlyAdd =
+            catalogOnlyRaw != null && (catalogOnlyRaw == '1' || catalogOnlyRaw.toLowerCase() == 'true');
 
         return AddProductPage(
           editProductId: editProductId,
           editCatalogItemId: editCatalogItemId,
+          catalogOnlyAdd: catalogOnlyAdd,
         );
       },
     ),

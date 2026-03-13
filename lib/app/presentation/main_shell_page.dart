@@ -30,7 +30,7 @@ class MainShellPage extends StatelessWidget {
     final int selectedIndex = _indexFromLocation(location);
 
     return Scaffold(
-      body: SafeArea(child: child),
+      body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         destinations: <NavigationDestination>[

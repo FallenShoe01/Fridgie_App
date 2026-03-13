@@ -12,16 +12,19 @@ import 'package:fridgie_app/features/lookup/data/models/lookup_result.dart';
 import 'package:fridgie_app/features/products/presentation/widgets/barcode_scanner_sheet.dart';
 import 'package:fridgie_app/features/products/presentation/widgets/product_autocomplete_field.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:fridgie_app/shared/top_snackbar.dart';
 
 class AddProductPage extends ConsumerStatefulWidget {
   const AddProductPage({
     super.key,
     this.editProductId,
     this.editCatalogItemId,
+    this.catalogOnlyAdd = false,
   });
 
   final int? editProductId;
   final int? editCatalogItemId;
+  final bool catalogOnlyAdd;
 
   @override
   ConsumerState<AddProductPage> createState() => _AddProductPageState();
@@ -49,6 +52,46 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   Product? _editingProduct;
   CatalogItem? _editingCatalogItem;
 
+  int _defaultCategoryDays() {
+    if (_batches.isEmpty) {
+      return 7;
+    }
+
+    final _DraftBatch batch = _batches.first;
+    final int days = batch.expiryDate.difference(batch.buyDate).inDays;
+    return days <= 0 ? 7 : days;
+  }
+
+  Future<void> _ensureCategoryExists(String category) async {
+    final String normalized = category.trim();
+    if (normalized.isEmpty || normalized == 'unknown') {
+      return;
+    }
+
+    await ref
+        .read(categoryPresetStoreProvider)
+        .add(
+          CategoryPreset(
+            name: normalized,
+            defaultExpiryDays: _defaultCategoryDays(),
+          ),
+        );
+
+    if (!mounted) {
+      return;
+    }
+
+    final List<CategoryPreset> presets = await ref
+        .read(categoryPresetStoreProvider)
+        .getAll();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _categoryPresets = presets;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -65,8 +108,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   }
 
   Future<void> _loadCategoryPresets() async {
-    final List<CategoryPreset> presets =
-        await ref.read(categoryPresetStoreProvider).getAll();
+    final List<CategoryPreset> presets = await ref
+        .read(categoryPresetStoreProvider)
+        .getAll();
     if (!mounted) {
       return;
     }
@@ -79,7 +123,8 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       widget.editProductId != null || widget.editCatalogItemId != null;
 
   bool get _isCatalogOnlyEdit =>
-      widget.editCatalogItemId != null && widget.editProductId == null;
+      widget.catalogOnlyAdd == true ||
+      (widget.editCatalogItemId != null && widget.editProductId == null);
 
   Future<void> _loadInitialDataForEdit() async {
     if (!_isEditMode) {
@@ -94,9 +139,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       final int productId = widget.editProductId!;
       final AppDatabase db = ref.read(dbProvider);
 
-      final Product? product = await (db.select(db.products)
-            ..where((Products t) => t.id.equals(productId)))
-          .getSingleOrNull();
+      final Product? product = await (db.select(
+        db.products,
+      )..where((Products t) => t.id.equals(productId))).getSingleOrNull();
       final List<ProductBatch> batches = await ref
           .read(batchRepositoryProvider)
           .getBatchesByProduct(productId);
@@ -124,16 +169,16 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                     ),
                   ]
                 : batches
-                    .map(
-                      (ProductBatch b) => _DraftBatch(
-                        quantity: b.quantity,
-                        buyDate: b.buyDate ?? DateTime.now(),
-                        expiryDate: b.expiryDate,
-                        notifDaysBefore: b.notificationDaysBefore,
-                        notifTime: b.notificationTimeLocal,
-                      ),
-                    )
-                    .toList(growable: false),
+                      .map(
+                        (ProductBatch b) => _DraftBatch(
+                          quantity: b.quantity,
+                          buyDate: b.buyDate ?? DateTime.now(),
+                          expiryDate: b.expiryDate,
+                          notifDaysBefore: b.notificationDaysBefore,
+                          notifTime: b.notificationTimeLocal,
+                        ),
+                      )
+                      .toList(growable: false),
           );
       }
     } else if (widget.editCatalogItemId != null) {
@@ -234,13 +279,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         }
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('add_product_found'.tr())),
-      );
+      showTopSnackBar(context, 'add_product_found'.tr());
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('add_product_not_found'.tr())),
-      );
+      showTopSnackBar(context, 'add_product_not_found'.tr());
     }
 
     setState(() {
@@ -268,10 +309,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     });
   }
 
-  Future<void> _pickDate({
-    required int index,
-    required bool isExpiry,
-  }) async {
+  Future<void> _pickDate({required int index, required bool isExpiry}) async {
     final _DraftBatch batch = _batches[index];
     final DateTime initial = isExpiry ? batch.expiryDate : batch.buyDate;
 
@@ -363,6 +401,25 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final String category = _categoryController.text.trim().isEmpty
         ? 'unknown'
         : _categoryController.text.trim();
+    await _ensureCategoryExists(category);
+
+    // If this page was opened for "catalog-only" creation (no Product),
+    // create or update the CatalogItem and return immediately.
+    if (widget.catalogOnlyAdd && _editingCatalogItem == null) {
+      await catalogRepository.upsertCatalogItem(
+        canonicalName: name,
+        barcode: barcode,
+        category: category,
+        defaultImagePath: _localImagePath,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+      });
+      Navigator.of(context).pop(true);
+      return;
+    }
     if (_isCatalogOnlyEdit && _editingCatalogItem != null) {
       await catalogRepository.updateCatalogItem(
         _editingCatalogItem!,
@@ -409,21 +466,24 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
           ),
         );
 
-        unawaited(notificationService.scheduleExpiryNotification(
-          notificationId: batchId,
-          title: 'Expiry reminder',
-          body: '$name expires soon',
-          expiryDate: batch.expiryDate,
-          daysBefore: batch.notifDaysBefore,
-          hhmm: batch.notifTime,
-        ));
+        unawaited(
+          notificationService.scheduleExpiryNotification(
+            notificationId: batchId,
+            title: 'Expiry reminder',
+            body: '$name expires soon',
+            expiryDate: batch.expiryDate,
+            daysBefore: batch.notifDaysBefore,
+            hhmm: batch.notifTime,
+          ),
+        );
       }
     } else {
       final int productId = await productRepository.createProduct(
         ProductsCompanion.insert(
           canonicalName: name,
-          barcode:
-              barcode.isEmpty ? const drift.Value.absent() : drift.Value(barcode),
+          barcode: barcode.isEmpty
+              ? const drift.Value.absent()
+              : drift.Value(barcode),
           category: drift.Value(category),
           defaultImagePath: _localImagePath == null
               ? const drift.Value.absent()
@@ -451,18 +511,22 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
           ),
         );
 
-        unawaited(notificationService.scheduleExpiryNotification(
-          notificationId: batchId,
-          title: 'Expiry reminder',
-          body: '$name expires soon',
-          expiryDate: batch.expiryDate,
-          daysBefore: batch.notifDaysBefore,
-          hhmm: batch.notifTime,
-        ));
+        unawaited(
+          notificationService.scheduleExpiryNotification(
+            notificationId: batchId,
+            title: 'Expiry reminder',
+            body: '$name expires soon',
+            expiryDate: batch.expiryDate,
+            daysBefore: batch.notifDaysBefore,
+            hhmm: batch.notifTime,
+          ),
+        );
       }
 
       if (_localImagePath != null) {
-        await db.into(db.productImages).insert(
+        await db
+            .into(db.productImages)
+            .insert(
               ProductImagesCompanion.insert(
                 productId: productId,
                 barcode: barcode.isEmpty
@@ -485,314 +549,416 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     Navigator.of(context).pop(true);
   }
 
+  Future<void> _confirmAndDeleteCatalogItem() async {
+    if (_editingCatalogItem == null) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: Text('delete'.tr()),
+        content: Text('delete_catalog_confirm'.tr()),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('confirm_cancel'.tr()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('delete'.tr()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final catalogRepository = ref.read(catalogRepositoryProvider);
+    await catalogRepository.deleteById(_editingCatalogItem!.id);
+
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingInitialData) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('product_action_edit'.tr()),
-        ),
+        appBar: AppBar(title: Text('product_action_edit'.tr())),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final double textScale = MediaQuery.textScalerOf(context).scale(1).clamp(
-          1,
-          1.25,
-        );
+    final double textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1, 1.25);
     final double previewSize = MediaQuery.sizeOf(context).width * 0.4;
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditMode ? 'product_action_edit'.tr() : 'add_product_title'.tr()),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _scanBarcode,
-        icon: const Icon(Icons.qr_code_scanner),
-        label: Text('add_product_scan'.tr()),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: FilledButton(
-          onPressed: _isSaving ? null : _save,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Text(
-              _isSaving ? 'add_product_saving'.tr() : 'add_product_save'.tr(),
-              textScaler: TextScaler.linear(textScale),
-            ),
-          ),
+        title: Text(
+          _isEditMode ? 'product_action_edit'.tr() : 'add_product_title'.tr(),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Align(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: _localImagePath != null
-                      ? Image.file(
-                          File(_localImagePath!),
-                          height: previewSize,
-                          width: previewSize,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          height: previewSize,
-                          width: previewSize,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.photo_outlined,
-                            size: 42,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
+      body: Stack(
+        children: <Widget>[
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 170),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: Text('add_product_gallery'.tr()),
+                  Align(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: _localImagePath != null
+                          ? Image.file(
+                              File(_localImagePath!),
+                              height: previewSize,
+                              width: previewSize,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              height: previewSize,
+                              width: previewSize,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.photo_outlined,
+                                size: 42,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: Text('add_product_camera'.tr()),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _barcodeController,
-                decoration: InputDecoration(
-                  labelText: 'add_product_barcode_label'.tr(),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.tonal(
-                onPressed: _isLoadingLookup ? null : _lookupFromBarcode,
-                child: Text(
-                  _isLoadingLookup
-                      ? 'add_product_searching'.tr()
-                      : 'add_product_search_db'.tr(),
-                  textScaler: TextScaler.linear(textScale),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ProductAutocompleteField(
-                controller: _nameController,
-                search: ref.read(catalogRepositoryProvider).autocompleteByName,
-                onSelected: (CatalogItem item) {
-                  _categoryController.text = item.category;
-                  if ((item.defaultImagePath ?? '').isNotEmpty) {
-                    setState(() {
-                      _localImagePath = item.defaultImagePath;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _categoryController,
-                decoration: InputDecoration(
-                  labelText: 'add_product_category_label'.tr(),
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              if (_categoryPresets.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _categoryPresets
-                      .map(
-                        (CategoryPreset preset) => ActionChip(
-                          onPressed: () => _applyCategoryPreset(preset),
-                          label: Text(
-                            '${preset.name} (${preset.defaultExpiryDays}d)',
-                          ),
+                  const SizedBox(height: 10),
+                  Center(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: <Widget>[
+                        OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: Text('add_product_gallery'.tr()),
                         ),
-                      )
-                      .toList(growable: false),
-                ),
-              ],
-              if (!_isCatalogOnlyEdit) ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  'add_product_batches_header'.tr(),
-                  style:
-                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  textScaler: TextScaler.linear(textScale),
-                ),
-                const SizedBox(height: 8),
-                ..._batches.asMap().entries.map((MapEntry<int, _DraftBatch> entry) {
-                  final int index = entry.key;
-                  final _DraftBatch batch = entry.value;
-                  final DateFormat dateFmt =
-                      DateFormat.yMd(context.locale.toString());
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: Text('add_product_camera'.tr()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ProductAutocompleteField(
+                    controller: _nameController,
+                    search: ref
+                        .read(catalogRepositoryProvider)
+                        .autocompleteByName,
+                    onSelected: (CatalogItem item) {
+                      _categoryController.text = item.category;
+                      if ((item.defaultImagePath ?? '').isNotEmpty) {
+                        setState(() {
+                          _localImagePath = item.defaultImagePath;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _CategoryAutocompleteField(
+                    controller: _categoryController,
+                    categories: _categoryPresets,
+                    onSelected: _applyCategoryPreset,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _barcodeController,
+                    decoration: InputDecoration(
+                      labelText: 'add_product_barcode_label'.tr(),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: FilledButton.tonal(
+                      onPressed: _isLoadingLookup ? null : _lookupFromBarcode,
+                      child: Text(
+                        _isLoadingLookup
+                            ? 'add_product_searching'.tr()
+                            : 'add_product_search_db'.tr(),
+                        textScaler: TextScaler.linear(textScale),
+                      ),
+                    ),
+                  ),
+                  if (!widget.catalogOnlyAdd &&
+                      !_isCatalogOnlyEdit) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Text(
+                      'add_product_batches_header'.tr(),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textScaler: TextScaler.linear(textScale),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._batches.asMap().entries.map((
+                      MapEntry<int, _DraftBatch> entry,
+                    ) {
+                      final int index = entry.key;
+                      final _DraftBatch batch = entry.value;
+                      final DateFormat dateFmt = DateFormat.yMd(
+                        context.locale.toString(),
+                      );
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text('add_product_batch_label'.tr(
-                                namedArgs: <String, String>{'n': '${index + 1}'},
-                              ), textScaler: TextScaler.linear(textScale)),
-                              Wrap(
-                                spacing: 4,
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: <Widget>[
+                                  Text(
+                                    'add_product_batch_label'.tr(
+                                      namedArgs: <String, String>{
+                                        'n': '${index + 1}',
+                                      },
+                                    ),
+                                    textScaler: TextScaler.linear(textScale),
+                                  ),
+                                  Wrap(
+                                    spacing: 4,
+                                    children: <Widget>[
+                                      IconButton(
+                                        tooltip:
+                                            'add_product_duplicate_batch_tooltip'
+                                                .tr(),
+                                        onPressed: () => _duplicateBatch(index),
+                                        icon: const Icon(Icons.copy_outlined),
+                                      ),
+                                      IconButton(
+                                        tooltip:
+                                            'add_product_remove_batch_tooltip'
+                                                .tr(),
+                                        onPressed: () => _removeBatch(index),
+                                        icon: const Icon(Icons.delete_outline),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: <Widget>[
+                                  Text('add_product_quantity'.tr()),
+                                  const SizedBox(width: 8),
                                   IconButton(
-                                    tooltip:
-                                        'add_product_duplicate_batch_tooltip'
-                                            .tr(),
-                                    onPressed: () => _duplicateBatch(index),
-                                    icon: const Icon(Icons.copy_outlined),
+                                    onPressed: () => _changeQuantity(index, -1),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                    ),
+                                  ),
+                                  Text('${batch.quantity}'),
+                                  IconButton(
+                                    onPressed: () => _changeQuantity(index, 1),
+                                    icon: const Icon(Icons.add_circle_outline),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => _pickDate(
+                                        index: index,
+                                        isExpiry: false,
+                                      ),
+                                      child: Text(
+                                        'add_product_buy_date'.tr(
+                                          namedArgs: <String, String>{
+                                            'date': dateFmt.format(
+                                              batch.buyDate.toLocal(),
+                                            ),
+                                          },
+                                        ),
+                                        textScaler: TextScaler.linear(
+                                          textScale,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => _pickDate(
+                                        index: index,
+                                        isExpiry: true,
+                                      ),
+                                      child: Text(
+                                        'add_product_expiry_date'.tr(
+                                          namedArgs: <String, String>{
+                                            'date': dateFmt.format(
+                                              batch.expiryDate.toLocal(),
+                                            ),
+                                          },
+                                        ),
+                                        textScaler: TextScaler.linear(
+                                          textScale,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: <Widget>[
+                                  const Icon(
+                                    Icons.notifications_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    iconSize: 18,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () =>
+                                        _changeNotifDays(index, -1),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    child: Text(
+                                      'add_product_notif_days'.tr(
+                                        namedArgs: <String, String>{
+                                          'days': '${batch.notifDaysBefore}',
+                                        },
+                                      ),
+                                      textScaler: TextScaler.linear(textScale),
+                                    ),
                                   ),
                                   IconButton(
-                                    tooltip:
-                                        'add_product_remove_batch_tooltip'.tr(),
-                                    onPressed: () => _removeBatch(index),
-                                    icon: const Icon(Icons.delete_outline),
+                                    iconSize: 18,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => _changeNotifDays(index, 1),
+                                    icon: const Icon(Icons.add_circle_outline),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  TextButton(
+                                    onPressed: () => _pickNotifTime(index),
+                                    child: Text(
+                                      'add_product_notif_at'.tr(
+                                        namedArgs: <String, String>{
+                                          'time': batch.notifTime,
+                                        },
+                                      ),
+                                      textScaler: TextScaler.linear(textScale),
+                                    ),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                          Row(
-                            children: <Widget>[
-                              Text('add_product_quantity'.tr()),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                onPressed: () => _changeQuantity(index, -1),
-                                icon: const Icon(Icons.remove_circle_outline),
-                              ),
-                              Text('${batch.quantity}'),
-                              IconButton(
-                                onPressed: () => _changeQuantity(index, 1),
-                                icon: const Icon(Icons.add_circle_outline),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      _pickDate(index: index, isExpiry: false),
-                                  child: Text(
-                                    'add_product_buy_date'.tr(namedArgs: <String,
-                                        String>{
-                                      'date': dateFmt
-                                          .format(batch.buyDate.toLocal()),
-                                    }),
-                                    textScaler: TextScaler.linear(textScale),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () =>
-                                      _pickDate(index: index, isExpiry: true),
-                                  child: Text(
-                                    'add_product_expiry_date'.tr(namedArgs: <String,
-                                        String>{
-                                      'date': dateFmt
-                                          .format(batch.expiryDate.toLocal()),
-                                    }),
-                                    textScaler: TextScaler.linear(textScale),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: <Widget>[
-                              const Icon(Icons.notifications_outlined, size: 16),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                iconSize: 18,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () => _changeNotifDays(index, -1),
-                                icon: const Icon(Icons.remove_circle_outline),
-                              ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text('add_product_notif_days'.tr(
-                                  namedArgs: <String, String>{
-                                    'days': '${batch.notifDaysBefore}',
-                                  },
-                                ), textScaler: TextScaler.linear(textScale)),
-                              ),
-                              IconButton(
-                                iconSize: 18,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () => _changeNotifDays(index, 1),
-                                icon: const Icon(Icons.add_circle_outline),
-                              ),
-                              const SizedBox(width: 12),
-                              TextButton(
-                                onPressed: () => _pickNotifTime(index),
-                                child: Text('add_product_notif_at'.tr(
-                                  namedArgs: <String, String>{
-                                    'time': batch.notifTime,
-                                  },
-                                ), textScaler: TextScaler.linear(textScale)),
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
+                      );
+                    }),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          final _DraftBatch last = _batches.last;
+                          setState(() {
+                            _batches.add(last.copyWith());
+                          });
+                        },
+                        icon: const Icon(Icons.add),
+                        label: Text(
+                          'add_product_add_batch'.tr(),
+                          textScaler: TextScaler.linear(textScale),
+                        ),
                       ),
                     ),
-                  );
-                }),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      final _DraftBatch last = _batches.last;
-                      setState(() {
-                        _batches.add(last.copyWith());
-                      });
-                    },
-                    icon: const Icon(Icons.add),
-                    label: Text(
-                      'add_product_add_batch'.tr(),
-                      textScaler: TextScaler.linear(textScale),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 24),
-            ],
+                  ],
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
           ),
-        ),
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, keyboardInset + 16),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    if (_isCatalogOnlyEdit && _editingCatalogItem != null)
+                      FloatingActionButton.extended(
+                        heroTag: 'catalog-delete-fab',
+                        onPressed: _confirmAndDeleteCatalogItem,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onErrorContainer,
+                        icon: const Icon(Icons.delete_outline),
+                        label: Text('delete'.tr()),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const Spacer(),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        FloatingActionButton.small(
+                          heroTag: 'barcode-scan-fab',
+                          onPressed: _isSaving ? null : _scanBarcode,
+                          tooltip: 'add_product_scan'.tr(),
+                          child: const Icon(Icons.qr_code_scanner),
+                        ),
+                        const SizedBox(height: 12),
+                        FloatingActionButton.extended(
+                          heroTag: 'save-item-fab',
+                          onPressed: _isSaving ? null : _save,
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: Text(
+                            _isSaving
+                                ? 'add_product_saving'.tr()
+                                : 'add_product_save'.tr(),
+                            textScaler: TextScaler.linear(textScale),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -826,6 +992,152 @@ class _DraftBatch {
       expiryDate: expiryDate ?? this.expiryDate,
       notifDaysBefore: notifDaysBefore ?? this.notifDaysBefore,
       notifTime: notifTime ?? this.notifTime,
+    );
+  }
+}
+
+class _CategoryAutocompleteField extends StatefulWidget {
+  const _CategoryAutocompleteField({
+    required this.controller,
+    required this.categories,
+    required this.onSelected,
+  });
+
+  final TextEditingController controller;
+  final List<CategoryPreset> categories;
+  final ValueChanged<CategoryPreset> onSelected;
+
+  @override
+  State<_CategoryAutocompleteField> createState() =>
+      _CategoryAutocompleteFieldState();
+}
+
+class _CategoryAutocompleteFieldState
+    extends State<_CategoryAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
+  List<CategoryPreset> _suggestions = <CategoryPreset>[];
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_updateSuggestions);
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategoryAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.categories != widget.categories) {
+      _updateSuggestions();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_updateSuggestions);
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (_focusNode.hasFocus) {
+      _updateSuggestions();
+      return;
+    }
+
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _suggestions = <CategoryPreset>[];
+      });
+    });
+  }
+
+  void _updateSuggestions() {
+    if (!_focusNode.hasFocus) {
+      return;
+    }
+
+    final String query = widget.controller.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _suggestions = <CategoryPreset>[];
+      });
+      return;
+    }
+
+    final Iterable<CategoryPreset> filtered = widget.categories.where(
+      (CategoryPreset preset) => preset.name.toLowerCase().contains(query),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _suggestions = filtered.take(8).toList(growable: false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        TextField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          decoration: InputDecoration(
+            labelText: 'add_product_category_label'.tr(),
+            border: const OutlineInputBorder(),
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+          ),
+        ),
+        if (_suggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(maxHeight: 220),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border.all(color: Theme.of(context).dividerColor),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggestions.length,
+              itemBuilder: (BuildContext context, int index) {
+                final CategoryPreset preset = _suggestions[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(preset.name),
+                  subtitle: Text(
+                    'category_default_days_value'.tr(
+                      namedArgs: <String, String>{
+                        'days': '${preset.defaultExpiryDays}',
+                      },
+                    ),
+                  ),
+                  onTap: () {
+                    widget.controller.text = preset.name;
+                    widget.controller.selection = TextSelection.fromPosition(
+                      TextPosition(offset: widget.controller.text.length),
+                    );
+                    setState(() {
+                      _suggestions = <CategoryPreset>[];
+                    });
+                    widget.onSelected(preset);
+                  },
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

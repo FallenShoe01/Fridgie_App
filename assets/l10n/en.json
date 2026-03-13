@@ -27,6 +27,10 @@
   "product_list_days_today": "today",
   "product_list_days_remaining": "{days} d",
   "product_list_days_no_date": "no date",
+  "batch_expiry_with_days": "Expiry: {date}  •  {days}",
+  "delete_product_confirm": "Delete this product and all its batches?",
+  "no_batches_for_product": "No batches found for this product",
+  "percent_value": "{pct} %",
   "table_header_name": "Name",
   "table_header_category": "Category",
   "table_header_expiry": "Expiry",
@@ -83,6 +87,8 @@
   "settings_accent_orange": "Orange",
   "settings_accent_green": "Green",
   "settings_language_label": "Language",
+  "language_en": "English",
+  "language_uk": "Українська",
   "settings_notifications_header": "Notifications",
   "settings_days_before_label": "Days before expiry",
   "settings_expiring_days_label": "Expiring-soon range (days)",
@@ -130,6 +136,9 @@
 
   "confirm_cancel": "Cancel",
   "confirm_ok": "OK",
+
+  "delete": "Delete",
+  "delete_catalog_confirm": "Delete this catalog item? This won't remove products already created.",
 
   "product_not_found": "Product not found",
   "product_no_batches": "No batches added yet"

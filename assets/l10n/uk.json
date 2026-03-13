@@ -27,9 +27,13 @@
   "product_list_days_today": "сьогодні",
   "product_list_days_remaining": "{days} д",
   "product_list_days_no_date": "немає дати",
+  "batch_expiry_with_days": "Термін: {date}  •  {days}",
+  "delete_product_confirm": "Видалити цей продукт та всі його партії?",
+  "no_batches_for_product": "Партій не знайдено для цього продукту",
+  "percent_value": "{pct} %",
   "table_header_name": "Назва",
   "table_header_category": "Категорія",
-  "table_header_expiry": "Термін",
+  "table_header_expiry": "Терм",
   "product_action_edit": "Редагувати",
   "product_action_eaten": "Перемістити в з'їдене",
   "product_action_trash": "Перемістити в сміття",
@@ -83,6 +87,8 @@
   "settings_accent_orange": "Помаранчевий",
   "settings_accent_green": "Зелений",
   "settings_language_label": "Мова",
+  "language_en": "English",
+  "language_uk": "Українська",
   "settings_notifications_header": "Сповіщення",
   "settings_days_before_label": "Днів до терміну",
   "settings_expiring_days_label": "Діапазон \"завершується скоро\" (дні)",
@@ -130,6 +136,9 @@
 
   "confirm_cancel": "Скасувати",
   "confirm_ok": "OK",
+
+  "delete": "Видалити",
+  "delete_catalog_confirm": "Видалити елемент каталогу? Це не видалить вже створені продукти.",
 
   "product_not_found": "Продукт не знайдено",
   "product_no_batches": "Партій ще немає"

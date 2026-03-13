@@ -10,6 +10,7 @@ import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/update/data/github_update_service.dart';
 import 'package:fridgie_app/features/update/data/models/github_release_info.dart';
 import 'package:go_router/go_router.dart';
+import 'package:fridgie_app/shared/top_snackbar.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -101,9 +102,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await controller.setLocale(_localeCode);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('settings_saved'.tr())),
-    );
+    showTopSnackBar(context, 'settings_saved'.tr());
   }
 
   Future<void> _pickTime() async {
@@ -223,14 +222,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('settings_title'.tr()),
-        actions: <Widget>[
-          TextButton(
-            onPressed: _isLoading ? null : _saveSettings,
-            child: Text('settings_save'.tr()),
-          ),
-        ],
       ),
-      body: _isLoading
+        body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -292,9 +285,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     labelText: 'settings_language_label'.tr(),
                     border: const OutlineInputBorder(),
                   ),
-                  items: const <DropdownMenuItem<String>>[
-                    DropdownMenuItem<String>(value: 'en', child: Text('English')),
-                    DropdownMenuItem<String>(value: 'uk', child: Text('Українська')),
+                  items: <DropdownMenuItem<String>>[
+                    DropdownMenuItem<String>(value: 'en', child: Text('language_en'.tr())),
+                    DropdownMenuItem<String>(value: 'uk', child: Text('language_uk'.tr())),
                   ],
                   onChanged: (String? value) async {
                     if (value == null) return;
@@ -405,6 +398,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
               ],
             ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _isLoading ? null : _saveSettings,
+          icon: const Icon(Icons.save),
+          label: Text('settings_save'.tr()),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -501,7 +500,11 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
           LinearProgressIndicator(value: _progress),
           const SizedBox(height: 8),
           if (_progress != null)
-            Text('${(_progress! * 100).toStringAsFixed(0)} %'),
+            Text(
+              'percent_value'.tr(namedArgs: <String, String>{
+                'pct': (_progress! * 100).toStringAsFixed(0),
+              }),
+            ),
           const SizedBox(height: 4),
           Text('update_do_not_close'.tr()),
         ],

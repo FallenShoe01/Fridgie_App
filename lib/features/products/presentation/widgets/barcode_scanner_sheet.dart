@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class BarcodeScannerSheet extends StatefulWidget {
   const BarcodeScannerSheet({super.key});
@@ -18,11 +19,11 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet> {
         height: 420,
         child: Column(
           children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.all(12),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
-                'Scan barcode',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                'add_product_scan'.tr(),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
             ),
             Expanded(
@@ -49,7 +50,7 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet> {
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text('confirm_cancel'.tr()),
             ),
             const SizedBox(height: 8),
           ],
