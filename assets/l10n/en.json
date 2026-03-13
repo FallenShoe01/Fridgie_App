@@ -106,6 +106,8 @@
   "settings_language_label": "Language",
   "language_en": "English",
   "language_uk": "Українська",
+  "language_ru": "Русский",
+  "app_version": "Version {version}",
   "settings_notifications_header": "Notifications",
   "settings_days_before_label": "Days before expiry",
   "settings_expiring_days_label": "Expiring-soon range (days)",

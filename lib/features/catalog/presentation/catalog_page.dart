@@ -432,6 +432,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             left: 18,
             bottom: 18,
             child: FloatingActionButton(
+              heroTag: 'catalog-toggle-view-fab',
               onPressed: () => setState(() {
                 _viewIndex = (_viewIndex == 0) ? 1 : 0;
               }),
@@ -446,11 +447,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             bottom: 18,
             child: _viewIndex == 1
                 ? FloatingActionButton(
+                    heroTag: 'catalog-add-category-fab',
                     onPressed: _showAddCategoryDialog,
                     tooltip: 'category_add'.tr(),
                     child: const Icon(Icons.add),
                   )
                 : FloatingActionButton.extended(
+                    heroTag: 'catalog-add-item-fab',
                     onPressed: () async {
                       final bool? added = await context.push<bool>(
                         '/add-product?catalogOnly=1',

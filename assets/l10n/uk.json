@@ -106,6 +106,8 @@
   "settings_language_label": "Мова",
   "language_en": "English",
   "language_uk": "Українська",
+  "language_ru": "Російська",
+  "app_version": "Версія {version}",
   "settings_notifications_header": "Сповіщення",
   "settings_days_before_label": "Днів до терміну",
   "settings_expiring_days_label": "Дні (головний екран)",

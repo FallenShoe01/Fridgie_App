@@ -8,6 +8,7 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
+  bool _runtimePermissionsRequested = false;
 
   void _setFallbackLocationByOffset() {
     final Duration systemOffset = DateTime.now().timeZoneOffset;
@@ -52,8 +53,6 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>();
 
     if (android != null) {
-      await android.requestNotificationsPermission();
-      await android.requestExactAlarmsPermission();
       await android.createNotificationChannel(
         const AndroidNotificationChannel(
           'expiry_alerts',
@@ -75,6 +74,7 @@ class NotificationService {
     required String hhmm,
   }) async {
     await initialize();
+    await _ensureRuntimePermissionsRequested();
 
     final tz.TZDateTime? scheduleAt = computeScheduleTime(
       expiryDate: expiryDate,
@@ -152,6 +152,22 @@ class NotificationService {
   Future<void> cancelNotification(int id) => _plugin.cancel(id);
 
   Future<void> cancelAll() => _plugin.cancelAll();
+
+  Future<void> _ensureRuntimePermissionsRequested() async {
+    if (_runtimePermissionsRequested) return;
+
+    final AndroidFlutterLocalNotificationsPlugin? android =
+        _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) {
+      _runtimePermissionsRequested = true;
+      return;
+    }
+
+    await android.requestNotificationsPermission();
+    await android.requestExactAlarmsPermission();
+    _runtimePermissionsRequested = true;
+  }
 
   static tz.TZDateTime? computeScheduleTime({
     required DateTime expiryDate,

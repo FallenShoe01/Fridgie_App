@@ -21,7 +21,6 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  bool _isLoading = true;
   final TextEditingController _daysCtrl = TextEditingController();
   final TextEditingController _expiringDaysCtrl = TextEditingController();
   final TextEditingController _timeCtrl = TextEditingController();
@@ -30,11 +29,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   ThemeMode _themeMode = ThemeMode.system;
   AppAccent _accent = AppAccent.teal;
   String _localeCode = 'en';
+  String? _appVersion;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _hydrateThemeAndLocaleFromController();
+    _daysCtrl.text = '3';
+    _expiringDaysCtrl.text = '3';
+    _timeCtrl.text = '09:00';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.microtask(() async {
+        if (!mounted) return;
+        await _loadSettings();
+      });
+    });
   }
 
   @override
@@ -46,21 +55,48 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _loadSettings() async {
-    final AppDatabase db = ref.read(dbProvider);
-    final List<AppSetting> rows = await db.select(db.appSettings).get();
-    final Map<String, String> map = <String, String>{
-      for (final AppSetting r in rows) r.key: r.value,
-    };
-    if (!mounted) return;
-    setState(() {
-      _daysCtrl.text = map['default_notification_days_before'] ?? '3';
-      _expiringDaysCtrl.text = map['main_expiring_soon_days'] ?? '3';
-      _timeCtrl.text = map['default_notification_time_local'] ?? '09:00';
-      _themeMode = _themeModeFromString(map['ui_theme_mode']);
-      _accent = accentFromString(map['ui_accent'] ?? 'teal');
-      _localeCode = map['ui_locale'] == 'uk' ? 'uk' : 'en';
-      _isLoading = false;
-    });
+    try {
+      final AppDatabase db = ref.read(dbProvider);
+      final Future<List<AppSetting>> settingsFuture = db.select(db.appSettings).get();
+      final Future<PackageInfo?> packageFuture = _loadPackageInfo();
+
+      final List<AppSetting> rows = await settingsFuture;
+      final PackageInfo? pkg = await packageFuture;
+      final Map<String, String> map = <String, String>{
+        for (final AppSetting r in rows) r.key: r.value,
+      };
+
+      if (!mounted) return;
+
+      setState(() {
+        _daysCtrl.text = map['default_notification_days_before'] ?? '3';
+        _expiringDaysCtrl.text = map['main_expiring_soon_days'] ?? '3';
+        _timeCtrl.text = map['default_notification_time_local'] ?? '09:00';
+        if (pkg != null) {
+          _appVersion = 'v${pkg.version}+${pkg.buildNumber}';
+        }
+      });
+    } catch (_) {
+      // Keep defaults if hydration fails.
+    }
+  }
+
+  Future<PackageInfo?> _loadPackageInfo() async {
+    try {
+      return await PackageInfo.fromPlatform();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _hydrateThemeAndLocaleFromController() {
+    final SettingsState? initialState =
+        ref.read(settingsControllerProvider).valueOrNull;
+    if (initialState == null) return;
+
+    _themeMode = initialState.themeMode;
+    _accent = initialState.accent;
+    _localeCode = initialState.localeCode;
   }
 
   Future<void> _saveSettings() async {
@@ -230,194 +266,233 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
       body: Stack(
         children: <Widget>[
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-                  child: ListView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                    children: <Widget>[
-                _sectionHeader('settings_appearance_header'.tr()),
-                SegmentedButton<ThemeMode>(
-                  segments: <ButtonSegment<ThemeMode>>[
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.system,
-                      label: Text('settings_theme_system'.tr()),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.light,
-                      label: Text('settings_theme_light'.tr()),
-                    ),
-                    ButtonSegment<ThemeMode>(
-                      value: ThemeMode.dark,
-                      label: Text('settings_theme_dark'.tr()),
-                    ),
-                  ],
-                  selected: <ThemeMode>{_themeMode},
-                  onSelectionChanged: (Set<ThemeMode> selection) {
-                    final ThemeMode selected = selection.first;
-                    setState(() {
-                      _themeMode = selected;
-                    });
-                    ref
-                        .read(settingsControllerProvider.notifier)
-                        .setThemeMode(selected);
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<AppAccent>(
-                  initialValue: _accent,
-                  decoration: InputDecoration(
-                    labelText: 'settings_accent_label'.tr(),
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: AppAccent.values
-                      .map(
-                        (AppAccent value) => DropdownMenuItem<AppAccent>(
-                          value: value,
-                          child: Text('settings_accent_${value.name}'.tr()),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (AppAccent? value) {
-                    if (value == null) return;
-                    setState(() {
-                      _accent = value;
-                    });
-                    ref.read(settingsControllerProvider.notifier).setAccent(value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _localeCode,
-                  decoration: InputDecoration(
-                    labelText: 'settings_language_label'.tr(),
-                    border: const OutlineInputBorder(),
-                  ),
-                  items: <DropdownMenuItem<String>>[
-                    DropdownMenuItem<String>(value: 'en', child: Text('language_en'.tr())),
-                    DropdownMenuItem<String>(value: 'uk', child: Text('language_uk'.tr())),
-                  ],
-                  onChanged: (String? value) async {
-                    if (value == null) return;
-                    setState(() {
-                      _localeCode = value;
-                    });
-                    await context.setLocale(Locale(value));
-                    await ref
-                        .read(settingsControllerProvider.notifier)
-                        .setLocale(value);
-                  },
-                ),
-                const SizedBox(height: 24),
-                _sectionHeader('settings_notifications_header'.tr()),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _daysCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: <TextInputFormatter>[
-                          FilteringTextInputFormatter.digitsOnly,
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: ListView(
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: <Widget>[
+                      _block(
+                        title: 'settings_appearance_header'.tr(),
+                        children: <Widget>[
+                          SegmentedButton<ThemeMode>(
+                            segments: <ButtonSegment<ThemeMode>>[
+                              ButtonSegment<ThemeMode>(
+                                value: ThemeMode.system,
+                                label: Text('settings_theme_system'.tr()),
+                              ),
+                              ButtonSegment<ThemeMode>(
+                                value: ThemeMode.light,
+                                label: Text('settings_theme_light'.tr()),
+                              ),
+                              ButtonSegment<ThemeMode>(
+                                value: ThemeMode.dark,
+                                label: Text('settings_theme_dark'.tr()),
+                              ),
+                            ],
+                            selected: <ThemeMode>{_themeMode},
+                            onSelectionChanged: (Set<ThemeMode> selection) {
+                              final ThemeMode selected = selection.first;
+                              setState(() {
+                                _themeMode = selected;
+                              });
+                              ref
+                                  .read(settingsControllerProvider.notifier)
+                                  .setThemeMode(selected);
+                            },
+                          ),
                         ],
-                        decoration: InputDecoration(
-                          labelText: 'settings_days_before_label'.tr(),
-                          border: const OutlineInputBorder(),
-                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _timeCtrl,
-                        readOnly: true,
-                        onTap: _pickTime,
-                        decoration: InputDecoration(
-                          labelText: 'settings_time_label'.tr(),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: const Icon(Icons.access_time),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _expiringDaysCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: <TextInputFormatter>[
-                          FilteringTextInputFormatter.digitsOnly,
+                      _block(
+                        title: '',
+                        children: <Widget>[
+                          DropdownButtonFormField<AppAccent>(
+                            initialValue: _accent,
+                            decoration: InputDecoration(
+                              labelText: 'settings_accent_label'.tr(),
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: AppAccent.values
+                                .map(
+                                  (AppAccent value) => DropdownMenuItem<AppAccent>(
+                                    value: value,
+                                    child: Text('settings_accent_${value.name}'.tr()),
+                                  ),
+                                )
+                                .toList(growable: false),
+                            onChanged: (AppAccent? value) {
+                              if (value == null) return;
+                              setState(() {
+                                _accent = value;
+                              });
+                              ref
+                                  .read(settingsControllerProvider.notifier)
+                                  .setAccent(value);
+                            },
+                          ),
                         ],
-                        decoration: InputDecoration(
-                          labelText: 'settings_expiring_days_label'.tr(),
-                          border: const OutlineInputBorder(),
-                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Container()),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _sectionHeader('settings_ota_header'.tr()),
-                Text(
-                  'settings_ota_description'.tr(),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _isCheckingUpdate ? null : _checkForUpdate,
-                  icon: _isCheckingUpdate
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.system_update_outlined),
-                  label: Text('settings_check_updates'.tr()),
-                ),
-                if (_updateMsg != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(
-                    _updateMsg!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                _sectionHeader('settings_data_header'.tr()),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.backup_outlined),
-                  title: Text('nav_backup'.tr()),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/backup'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.battery_saver_outlined),
-                  title: Text('nav_background_reliability'.tr()),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/background-reliability'),
-                ),
-                    ],
-                  ),
-                ),
+                      _block(
+                        title: '',
+                        children: <Widget>[
+                          DropdownButtonFormField<String>(
+                            initialValue: _localeCode,
+                            decoration: InputDecoration(
+                              labelText: 'settings_language_label'.tr(),
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: <DropdownMenuItem<String>>[
+                              DropdownMenuItem<String>(
+                                value: 'en',
+                                child: Text('language_en'.tr()),
+                              ),
+                              DropdownMenuItem<String>(
+                                value: 'uk',
+                                child: Text('language_uk'.tr()),
+                              ),
+                              DropdownMenuItem<String>(
+                                value: 'ru',
+                                child: Text('language_ru'.tr()),
+                              ),
+                            ],
+                            onChanged: (String? value) async {
+                              if (value == null) return;
+                              setState(() {
+                                _localeCode = value;
+                              });
+                              await context.setLocale(Locale(value));
+                              await ref
+                                  .read(settingsControllerProvider.notifier)
+                                  .setLocale(value);
+                            },
+                          ),
+                        ],
+                      ),
+                      _block(
+                        title: 'settings_notifications_header'.tr(),
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: TextField(
+                                  controller: _daysCtrl,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: <TextInputFormatter>[
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  decoration: InputDecoration(
+                                    labelText: 'settings_days_before_label'.tr(),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _timeCtrl,
+                                  readOnly: true,
+                                  onTap: _pickTime,
+                                  decoration: InputDecoration(
+                                    labelText: 'settings_time_label'.tr(),
+                                    border: const OutlineInputBorder(),
+                                    suffixIcon: const Icon(Icons.access_time),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _expiringDaysCtrl,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'settings_expiring_days_label'.tr(),
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _block(
+                        title: 'settings_ota_header'.tr(),
+                        children: <Widget>[
+                          Text(
+                            'settings_ota_description'.tr(),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _isCheckingUpdate ? null : _checkForUpdate,
+                            icon: _isCheckingUpdate
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.system_update_outlined),
+                            label: Text('settings_check_updates'.tr()),
+                          ),
+                          if (_updateMsg != null) ...<Widget>[
+                            const SizedBox(height: 8),
+                            Text(
+                              _updateMsg!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.info_outline),
+                            title: Text(
+                              _appVersion == null
+                                  ? '...'
+                                  : 'app_version'.tr(
+                                      namedArgs: <String, String>{
+                                        'version': _appVersion!,
+                                      },
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _block(
+                        title: 'settings_data_header'.tr(),
+                        children: <Widget>[
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.backup_outlined),
+                            title: Text('nav_backup'.tr()),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/backup'),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.battery_saver_outlined),
+                            title: Text('nav_background_reliability'.tr()),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/background-reliability'),
+                          ),
+                        ],
+                      ),
+                      
+              ],
+            ),
+          ),
           SafeArea(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, keyboardInset + 16),
               child: Align(
                 alignment: Alignment.bottomRight,
                 child: FloatingActionButton.extended(
-                  onPressed: _isLoading ? null : _saveSettings,
+                  heroTag: 'settings-save-fab',
+                  onPressed: _saveSettings,
                   icon: const Icon(Icons.save),
                   label: Text('settings_save'.tr()),
                 ),
@@ -429,21 +504,37 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _sectionHeader(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+  Widget _block({required String title, required List<Widget> children}) => Card(
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (title.isNotEmpty) _sectionHeader(title),
+              ...children,
+            ],
+          ),
         ),
       );
 
-  ThemeMode _themeModeFromString(String? raw) {
-    return switch (raw) {
-      'light' => ThemeMode.light,
-      'dark' => ThemeMode.dark,
-      _ => ThemeMode.system,
-    };
-  }
+  Widget _sectionHeader(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+        ),
+      );
+
 }
 
 // ---------------------------------------------------------------------------

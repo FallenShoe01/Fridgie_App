@@ -477,12 +477,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           FloatingActionButton.small(
+            heroTag: 'products-scan-fab',
             onPressed: _scanAndAdd,
             tooltip: 'add_product_scan'.tr(),
             child: const Icon(Icons.qr_code_scanner),
           ),
           const SizedBox(height: 12),
           FloatingActionButton.extended(
+            heroTag: 'products-add-fab',
             onPressed: _openAddProduct,
             icon: const Icon(Icons.add),
             label: Text('nav_add'.tr()),

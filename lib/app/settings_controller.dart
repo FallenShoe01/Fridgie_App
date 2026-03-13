@@ -29,11 +29,15 @@ class SettingsState {
 }
 
 class SettingsController extends StateNotifier<AsyncValue<SettingsState>> {
-  SettingsController(this._db)
+  SettingsController(this._db, {SettingsState? initialState})
       : super(
-          const AsyncValue<SettingsState>.loading(),
+          initialState == null
+              ? const AsyncValue<SettingsState>.loading()
+              : AsyncValue<SettingsState>.data(initialState),
         ) {
-    _load();
+    if (initialState == null) {
+      _load();
+    }
   }
 
   final AppDatabase _db;
@@ -94,6 +98,7 @@ class SettingsController extends StateNotifier<AsyncValue<SettingsState>> {
   String _localeFromString(String? raw) {
     return switch (raw) {
       'uk' => 'uk',
+      'ru' => 'ru',
       _ => 'en',
     };
   }

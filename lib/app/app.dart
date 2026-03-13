@@ -24,7 +24,9 @@ class FridgieApp extends ConsumerWidget {
       title: 'Fridgie',
       debugShowCheckedModeBanner: false,
       routerConfig: appRouter,
-      
+
+      themeAnimationDuration: const Duration(milliseconds: 280),
+      themeAnimationCurve: Curves.easeOutCubic,
       themeMode: settings.themeMode,
       theme: buildAppTheme(
         brightness: ThemeBrightness.light,
@@ -44,7 +46,7 @@ class FridgieApp extends ConsumerWidget {
         // Ensure EasyLocalization reflects persisted settings once loaded.
         if (settingsAsync is AsyncData<SettingsState>) {
           final Locale target = Locale(settings.localeCode);
-          if (ctx.locale != target) {
+          if (ctx.locale.languageCode != target.languageCode) {
             // Fire-and-forget: caller of setLocale will rebuild app when done.
             // Use addPostFrameCallback to avoid changing locale during build.
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -65,12 +67,14 @@ class FridgieApp extends ConsumerWidget {
         final double responsiveScale =
             (baseScale * widthFactor).clamp(0.85, 2.0);
 
-        return MediaQuery(
+        final Widget content = MediaQuery(
           data: media.copyWith(
             textScaler: TextScaler.linear(responsiveScale),
           ),
           child: SafeArea(left: false, right: false, child: child),
         );
+
+        return content;
       },
     );
   }
