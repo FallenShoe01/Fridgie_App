@@ -73,6 +73,59 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     days.dispose();
   }
 
+  Future<void> _showEditCategoryDialog(CategoryPreset item) async {
+    final TextEditingController name = TextEditingController(text: item.name);
+    final TextEditingController days =
+        TextEditingController(text: '${item.defaultExpiryDays}');
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('category_add'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: name,
+                decoration: InputDecoration(
+                  labelText: 'table_header_name'.tr(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: days,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'category_default_days'.tr(),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('confirm_cancel'.tr()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('confirm_ok'.tr()),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok == true) {
+      final CategoryPreset entry = CategoryPreset(
+        name: name.text.trim(),
+        defaultExpiryDays: int.tryParse(days.text.trim()) ?? item.defaultExpiryDays,
+      );
+      await ref.read(categoryPresetStoreProvider).updateByName(item.name, entry);
+      setState(() {});
+    }
+    name.dispose();
+    days.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -347,14 +400,25 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       },
                                     ),
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () async {
-                                      await ref
-                                          .read(categoryPresetStoreProvider)
-                                          .deleteByName(item.name);
-                                      setState(() {});
-                                    },
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () async {
+                                          await _showEditCategoryDialog(item);
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () async {
+                                          await ref
+                                              .read(categoryPresetStoreProvider)
+                                              .deleteByName(item.name);
+                                          setState(() {});
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 );
                               },

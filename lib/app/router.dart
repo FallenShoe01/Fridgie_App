@@ -47,10 +47,19 @@ final GoRouter appRouter = GoRouter(
         final bool catalogOnlyAdd =
             catalogOnlyRaw != null && (catalogOnlyRaw == '1' || catalogOnlyRaw.toLowerCase() == 'true');
 
+        final String? initBarcode = state.uri.queryParameters['initBarcode'];
+        final String? initName = state.uri.queryParameters['initName'];
+        final String? initCategory = state.uri.queryParameters['initCategory'];
+        final String? initScanDate = state.uri.queryParameters['initScanDate'];
+
         return AddProductPage(
           editProductId: editProductId,
           editCatalogItemId: editCatalogItemId,
           catalogOnlyAdd: catalogOnlyAdd,
+          initialBarcode: initBarcode,
+          initialName: initName,
+          initialCategory: initCategory,
+          initialScanDate: initScanDate,
         );
       },
     ),

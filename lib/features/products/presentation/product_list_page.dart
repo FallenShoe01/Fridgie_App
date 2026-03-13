@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fridgie_app/app/providers.dart';
+import 'package:fridgie_app/features/products/presentation/widgets/barcode_scanner_sheet.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/categories/data/category_preset_store.dart';
 import 'package:fridgie_app/features/products/data/product_repository.dart';
@@ -112,12 +113,140 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }).ignore();
   }
 
+  Future<void> _scanAndAdd() async {
+    final String? scanned = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const BarcodeScannerSheet(),
+    );
+
+    if (!mounted || scanned == null || scanned.trim().isEmpty) {
+      return;
+    }
+
+    final String barcode = scanned.trim();
+    final DateTime now = DateTime.now();
+    final DateTime scanDate = DateTime(now.year, now.month, now.day);
+
+    final productRepository = ref.read(productRepositoryProvider);
+    final batchRepository = ref.read(batchRepositoryProvider);
+    final notificationService = ref.read(notificationServiceProvider);
+
+    final Product? existingProduct = await productRepository.getByBarcode(barcode);
+    if (existingProduct != null) {
+      final List<ProductBatch> existingBatches = await batchRepository
+          .getBatchesByProduct(existingProduct.id);
+
+      ProductBatch? sameDayBatch;
+      for (final ProductBatch batch in existingBatches) {
+        final DateTime batchDay = DateTime(
+          (batch.buyDate ?? batch.createdAt).year,
+          (batch.buyDate ?? batch.createdAt).month,
+          (batch.buyDate ?? batch.createdAt).day,
+        );
+        if (_isSameDay(batchDay, scanDate)) {
+          sameDayBatch = batch;
+          break;
+        }
+      }
+
+      if (sameDayBatch != null) {
+        await batchRepository.updateBatch(
+          sameDayBatch.copyWith(quantity: sameDayBatch.quantity + 1),
+        );
+      } else {
+        final ProductBatch? template =
+            existingBatches.isEmpty ? null : existingBatches.last;
+        final int notifDays = template?.notificationDaysBefore ?? 3;
+        final String notifTime = template?.notificationTimeLocal ?? '09:00';
+
+        final int shelfLifeDays;
+        if (template == null) {
+          shelfLifeDays = 7;
+        } else {
+          final DateTime templateBuy = template.buyDate ??
+              template.expiryDate.subtract(const Duration(days: 7));
+          final int diff = template.expiryDate
+              .difference(DateTime(templateBuy.year, templateBuy.month, templateBuy.day))
+              .inDays;
+          shelfLifeDays = diff <= 0 ? 7 : diff;
+        }
+
+        final DateTime expiryDate = scanDate.add(Duration(days: shelfLifeDays));
+        final int batchId = await batchRepository.createBatch(
+          ProductBatchesCompanion.insert(
+            productId: existingProduct.id,
+            buyDate: drift.Value<DateTime>(scanDate),
+            expiryDate: expiryDate,
+            quantity: const drift.Value<int>(1),
+            notificationDaysBefore: drift.Value<int>(notifDays),
+            notificationTimeLocal: drift.Value<String>(notifTime),
+          ),
+        );
+
+        unawaited(
+          notificationService.scheduleExpiryNotification(
+            notificationId: batchId,
+            title: 'Expiry reminder',
+            body: '${existingProduct.canonicalName} expires soon',
+            expiryDate: expiryDate,
+            daysBefore: notifDays,
+            hhmm: notifTime,
+          ),
+        );
+      }
+
+      await productRepository.restoreActive(existingProduct.id);
+      if (!mounted) return;
+      showTopSnackBar(context, 'product_scan_batch_added'.tr());
+      setState(_refreshList);
+      return;
+    }
+
+    final String scanDateIso = scanDate.toIso8601String();
+    final catalogRepo = ref.read(catalogRepositoryProvider);
+    final catalogItem = await catalogRepo.getByBarcode(barcode);
+    if (catalogItem != null) {
+      if (!mounted) return;
+      final String url =
+          '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initName=${Uri.encodeComponent(catalogItem.canonicalName)}&initCategory=${Uri.encodeComponent(catalogItem.category)}&initScanDate=${Uri.encodeComponent(scanDateIso)}';
+      final bool? added = await context.push<bool>(url);
+      if (added == true && mounted) setState(_refreshList);
+      return;
+    }
+
+    final lookupService = ref.read(productLookupServiceProvider);
+    final result = await lookupService.lookupByBarcode(barcode);
+    if (result != null) {
+      if (!mounted) return;
+      final String nameEnc = Uri.encodeComponent(result.name);
+      final String categoryEnc = Uri.encodeComponent(result.category ?? '');
+      final String url =
+          '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initName=$nameEnc&initCategory=$categoryEnc&initScanDate=${Uri.encodeComponent(scanDateIso)}';
+      final bool? added = await context.push<bool>(url);
+      if (added == true && mounted) setState(_refreshList);
+      return;
+    }
+
+    if (!mounted) return;
+    final bool? added = await context.push<bool>(
+      '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initScanDate=${Uri.encodeComponent(scanDateIso)}',
+    );
+    if (added == true && mounted) setState(_refreshList);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Future<void> _applyBatchAction(
     ProductListItem item,
     _BatchAction action,
   ) async {
     final batchRepository = ref.read(batchRepositoryProvider);
     final notificationService = ref.read(notificationServiceProvider);
+    final productRepository = ref.read(productRepositoryProvider);
+    final consumptionRepository = ref.read(consumptionRepositoryProvider);
 
     final List<ProductBatch> batches =
         await batchRepository.getBatchesByProduct(item.product.id);
@@ -186,8 +315,40 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       return;
     }
 
-    await batchRepository.deleteBatch(selected.id);
-    unawaited(notificationService.cancelNotification(selected.id));
+    final int? consumeQuantity = await _pickConsumptionQuantity(selected);
+    if (consumeQuantity == null) {
+      return;
+    }
+
+    final int nextQuantity = selected.quantity - consumeQuantity;
+    if (nextQuantity <= 0) {
+      await batchRepository.deleteBatch(selected.id);
+      unawaited(notificationService.cancelNotification(selected.id));
+    } else {
+      await batchRepository.updateBatch(
+        selected.copyWith(quantity: nextQuantity),
+      );
+    }
+
+    await consumptionRepository.logConsumption(
+      productId: item.product.id,
+      batchId: selected.id,
+      action: action == _BatchAction.eaten ? 'eaten' : 'trash',
+      quantity: consumeQuantity,
+      batchExpiryDate: selected.expiryDate,
+    );
+
+    final List<ProductBatch> remaining =
+        await batchRepository.getBatchesByProduct(item.product.id);
+    if (remaining.isEmpty) {
+      if (action == _BatchAction.eaten) {
+        await productRepository.markEaten(item.product.id);
+      } else {
+        await productRepository.markTrash(item.product.id);
+      }
+    } else {
+      await productRepository.restoreActive(item.product.id);
+    }
 
     if (!mounted) {
       return;
@@ -200,6 +361,67 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
           : 'product_action_trash'.tr(),
     );
     setState(_refreshList);
+  }
+
+  Future<int?> _pickConsumptionQuantity(ProductBatch selected) async {
+    if (selected.quantity <= 1) {
+      return 1;
+    }
+
+    int qty = 1;
+    return showDialog<int>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDlg) {
+            return AlertDialog(
+              title: Text('consume_quantity_title'.tr()),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    'consume_quantity_available'.tr(
+                      namedArgs: <String, String>{
+                        'count': '${selected.quantity}',
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      IconButton(
+                        onPressed: qty > 1
+                            ? () => setDlg(() => qty -= 1)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text('$qty'),
+                      IconButton(
+                        onPressed: qty < selected.quantity
+                            ? () => setDlg(() => qty += 1)
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text('confirm_cancel'.tr()),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop(qty),
+                  child: Text('confirm_ok'.tr()),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _confirmDeleteProduct(ProductListItem item) async {
@@ -248,10 +470,23 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       appBar: AppBar(
         title: Text('nav_products'.tr()),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddProduct,
-        icon: const Icon(Icons.add),
-        label: Text('nav_add'.tr()),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          FloatingActionButton.small(
+            onPressed: _scanAndAdd,
+            tooltip: 'add_product_scan'.tr(),
+            child: const Icon(Icons.qr_code_scanner),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            onPressed: _openAddProduct,
+            icon: const Icon(Icons.add),
+            label: Text('nav_add'.tr()),
+          ),
+        ],
       ),
       body: FutureBuilder<List<ProductListItem>>(
         future: _listFuture,

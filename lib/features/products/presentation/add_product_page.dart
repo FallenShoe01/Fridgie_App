@@ -20,7 +20,16 @@ class AddProductPage extends ConsumerStatefulWidget {
     this.editProductId,
     this.editCatalogItemId,
     this.catalogOnlyAdd = false,
+    this.initialBarcode,
+    this.initialName,
+    this.initialCategory,
+    this.initialScanDate,
   });
+
+  final String? initialBarcode;
+  final String? initialName;
+  final String? initialCategory;
+  final String? initialScanDate;
 
   final int? editProductId;
   final int? editCatalogItemId;
@@ -32,6 +41,11 @@ class AddProductPage extends ConsumerStatefulWidget {
 
 class _AddProductPageState extends ConsumerState<AddProductPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _nameFieldKey = GlobalKey();
+  final GlobalKey _categoryFieldKey = GlobalKey();
+  DateTime? _lastAutoScrollAt;
+  bool _isAutoScrollRunning = false;
 
   final TextEditingController _barcodeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -49,8 +63,11 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   bool _isLoadingInitialData = false;
   String? _localImagePath;
   List<CategoryPreset> _categoryPresets = <CategoryPreset>[];
+  int _settingsDefaultNotificationDaysBefore = 3;
+  String _settingsDefaultNotificationTime = '09:00';
   Product? _editingProduct;
   CatalogItem? _editingCatalogItem;
+  List<ConsumptionEvent> _consumptionHistory = <ConsumptionEvent>[];
 
   int _defaultCategoryDays() {
     if (_batches.isEmpty) {
@@ -95,16 +112,137 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   @override
   void initState() {
     super.initState();
+    _loadBatchDefaultsFromSettings();
     _loadCategoryPresets();
     _loadInitialDataForEdit();
+    if (!_isEditMode) {
+      if (widget.initialBarcode != null && widget.initialBarcode!.isNotEmpty) {
+        _barcodeController.text = widget.initialBarcode!;
+      }
+      if (widget.initialName != null && widget.initialName!.isNotEmpty) {
+        try {
+          _nameController.text = Uri.decodeComponent(widget.initialName!);
+        } catch (_) {
+          _nameController.text = widget.initialName!;
+        }
+      }
+      if (widget.initialCategory != null && widget.initialCategory!.isNotEmpty) {
+        try {
+          _categoryController.text = Uri.decodeComponent(widget.initialCategory!);
+        } catch (_) {
+          _categoryController.text = widget.initialCategory!;
+        }
+        _applyCategoryPresetIfExists(_categoryController.text);
+      }
+      if (widget.initialScanDate != null && widget.initialScanDate!.isNotEmpty) {
+        try {
+          final DateTime parsed = DateTime.parse(widget.initialScanDate!);
+          final DateTime day = DateTime(parsed.year, parsed.month, parsed.day);
+          if (_batches.isNotEmpty) {
+            final _DraftBatch first = _batches.first;
+            _batches[0] = first.copyWith(
+              buyDate: day,
+              expiryDate: day.add(const Duration(days: 7)),
+            );
+          }
+        } catch (_) {
+          // Ignore invalid date payload.
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _barcodeController.dispose();
     _nameController.dispose();
     _categoryController.dispose();
     super.dispose();
+  }
+
+  void _ensureAutocompleteVisible(GlobalKey key) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      final DateTime now = DateTime.now();
+      if (_isAutoScrollRunning) {
+        return;
+      }
+      if (_lastAutoScrollAt != null &&
+          now.difference(_lastAutoScrollAt!).inMilliseconds < 260) {
+        return;
+      }
+
+      final BuildContext? targetContext = key.currentContext;
+      if (targetContext == null) {
+        return;
+      }
+
+      _isAutoScrollRunning = true;
+      _lastAutoScrollAt = now;
+      try {
+        await Scrollable.ensureVisible(
+          targetContext,
+          alignment: 0.14,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+        );
+      } finally {
+        _isAutoScrollRunning = false;
+      }
+    });
+  }
+
+  Future<List<CatalogItem>> _searchNameSuggestions(String query) async {
+    final String normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return <CatalogItem>[];
+    }
+
+    final Map<String, CatalogItem> merged = <String, CatalogItem>{};
+
+    final catalogResults = await ref
+        .read(catalogRepositoryProvider)
+        .autocompleteByName(query);
+
+    for (final CatalogItem item in catalogResults) {
+      merged[item.canonicalName.trim().toLowerCase()] = item;
+    }
+
+    if (merged.isEmpty) {
+      final List<CatalogItem> allCatalog = await ref
+          .read(catalogRepositoryProvider)
+          .getAllCatalogItems();
+      for (final CatalogItem item in allCatalog) {
+        if (item.canonicalName.toLowerCase().contains(normalized)) {
+          merged[item.canonicalName.trim().toLowerCase()] = item;
+        }
+      }
+    }
+
+    final productResults = await ref
+        .read(productRepositoryProvider)
+        .autocompleteByName(query);
+
+    for (final Product p in productResults) {
+      final CatalogItem mapped = CatalogItem(
+        id: p.id,
+        canonicalName: p.canonicalName,
+        barcode: p.barcode,
+        category: p.category,
+        defaultImagePath: p.defaultImagePath,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      );
+      merged.putIfAbsent(p.canonicalName.trim().toLowerCase(), () => mapped);
+    }
+
+    final List<CatalogItem> output = merged.values.toList(growable: false)
+      ..sort((CatalogItem a, CatalogItem b) => a.canonicalName.compareTo(b.canonicalName));
+
+    return output.take(10).toList(growable: false);
   }
 
   Future<void> _loadCategoryPresets() async {
@@ -116,6 +254,104 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     }
     setState(() {
       _categoryPresets = presets;
+    });
+
+    if (!_isEditMode) {
+      _applyCategoryPresetIfExists(_categoryController.text);
+    }
+  }
+
+  Future<void> _loadBatchDefaultsFromSettings() async {
+    final AppDatabase db = ref.read(dbProvider);
+    final List<AppSetting> rows = await db.select(db.appSettings).get();
+    final Map<String, String> map = <String, String>{
+      for (final AppSetting row in rows) row.key: row.value,
+    };
+
+    final int notifDays =
+        int.tryParse(map['default_notification_days_before'] ?? '') ?? 3;
+    final String notifTimeRaw = map['default_notification_time_local'] ?? '09:00';
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _settingsDefaultNotificationDaysBefore = notifDays.clamp(0, 365);
+      _settingsDefaultNotificationTime = _normalizeTime(notifTimeRaw);
+
+      if (!_isEditMode && _batches.isNotEmpty) {
+        final _DraftBatch first = _batches.first;
+        _batches[0] = first.copyWith(
+          notifDaysBefore: _settingsDefaultNotificationDaysBefore,
+          notifTime: _settingsDefaultNotificationTime,
+        );
+      }
+    });
+  }
+
+  String _normalizeTime(String raw) {
+    final List<String> parts = raw.split(':');
+    if (parts.length != 2) {
+      return '09:00';
+    }
+    final int? h = int.tryParse(parts[0]);
+    final int? m = int.tryParse(parts[1]);
+    if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
+      return '09:00';
+    }
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
+
+  CategoryPreset? _findCategoryPresetByName(String categoryName) {
+    final String normalized = categoryName.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    for (final CategoryPreset preset in _categoryPresets) {
+      if (preset.name.trim().toLowerCase() == normalized) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  int _effectiveNotifDaysForCategory(String categoryName) {
+    final CategoryPreset? preset = _findCategoryPresetByName(categoryName);
+    return preset?.defaultExpiryDays ?? _settingsDefaultNotificationDaysBefore;
+  }
+
+  void _overwriteBatchNotifDaysForCategory(String categoryName) {
+    final int notifDays = _effectiveNotifDaysForCategory(categoryName);
+    setState(() {
+      _batches.setAll(
+        0,
+        _batches.map(
+          (_DraftBatch batch) => batch.copyWith(
+            notifDaysBefore: notifDays,
+          ),
+        ),
+      );
+    });
+  }
+
+  void _applyCategoryPresetIfExists(String categoryName) {
+    _overwriteBatchNotifDaysForCategory(categoryName);
+  }
+
+  void _addBatchWithDefaults() {
+    final DateTime buyDate = DateTime.now();
+
+    setState(() {
+      _batches.add(
+        _DraftBatch(
+          quantity: 1,
+          buyDate: buyDate,
+          expiryDate: buyDate.add(const Duration(days: 7)),
+          notifDaysBefore: _settingsDefaultNotificationDaysBefore,
+          notifTime: _settingsDefaultNotificationTime,
+        ),
+      );
     });
   }
 
@@ -145,6 +381,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       final List<ProductBatch> batches = await ref
           .read(batchRepositoryProvider)
           .getBatchesByProduct(productId);
+        final List<ConsumptionEvent> history = await ref
+          .read(consumptionRepositoryProvider)
+          .getByProduct(productId);
 
       if (!mounted) {
         return;
@@ -180,8 +419,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                       )
                       .toList(growable: false),
           );
+                _consumptionHistory = history;
       }
     } else if (widget.editCatalogItemId != null) {
+      _consumptionHistory = <ConsumptionEvent>[];
       final CatalogItem? item = await ref
           .read(catalogRepositoryProvider)
           .getById(widget.editCatalogItemId!);
@@ -210,18 +451,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
   void _applyCategoryPreset(CategoryPreset preset) {
     _categoryController.text = preset.name;
-    setState(() {
-      _batches.setAll(
-        0,
-        _batches.map(
-          (_DraftBatch batch) => batch.copyWith(
-            expiryDate: batch.buyDate.add(
-              Duration(days: preset.defaultExpiryDays),
-            ),
-          ),
-        ),
-      );
-    });
+    _overwriteBatchNotifDaysForCategory(preset.name);
   }
 
   Future<void> _scanBarcode() async {
@@ -252,6 +482,31 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final lookupService = ref.read(productLookupServiceProvider);
     final imageService = ref.read(imageServiceProvider);
 
+    // First: check local catalog by barcode
+    final catalogRepo = ref.read(catalogRepositoryProvider);
+    final CatalogItem? catalogItem = await catalogRepo.getByBarcode(barcode);
+
+    if (!mounted) return;
+
+    if (catalogItem != null) {
+      _nameController.text = catalogItem.canonicalName;
+      _categoryController.text = catalogItem.category.trim();
+      _applyCategoryPresetIfExists(_categoryController.text);
+
+      if ((catalogItem.defaultImagePath ?? '').isNotEmpty) {
+        setState(() {
+          _localImagePath = catalogItem.defaultImagePath;
+        });
+      }
+
+      showTopSnackBar(context, 'add_product_found_local'.tr());
+      setState(() {
+        _isLoadingLookup = false;
+      });
+      return;
+    }
+
+    // Fallback: world lookup providers
     final LookupResult? result = await lookupService.lookupByBarcode(barcode);
 
     if (!mounted) {
@@ -261,6 +516,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     if (result != null) {
       _nameController.text = result.name;
       _categoryController.text = (result.category ?? '').trim();
+      _applyCategoryPresetIfExists(_categoryController.text);
 
       if ((result.imageUrl ?? '').isNotEmpty) {
         final String? downloadedPath = await imageService.downloadAndStoreImage(
@@ -296,6 +552,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         : _barcodeController.text.trim();
 
     final String? imagePath = await imageService.pickCropAndStoreImage(
+      context: context,
       imageKey: key,
       source: source,
     );
@@ -382,7 +639,15 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   }
 
   Future<void> _save() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final String name = _nameController.text.trim();
+    if (name.isEmpty) {
+      showTopSnackBar(context, 'add_product_name_required'.tr());
       return;
     }
 
@@ -397,7 +662,6 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final notificationService = ref.read(notificationServiceProvider);
 
     final String barcode = _barcodeController.text.trim();
-    final String name = _nameController.text.trim();
     final String category = _categoryController.text.trim().isEmpty
         ? 'unknown'
         : _categoryController.text.trim();
@@ -435,6 +699,8 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
           barcode: drift.Value<String?>(barcode.isEmpty ? null : barcode),
           category: category,
           defaultImagePath: drift.Value<String?>(_localImagePath),
+          status: 'active',
+          statusUpdatedAt: drift.Value<DateTime?>(DateTime.now()),
           updatedAt: DateTime.now(),
         ),
       );
@@ -594,6 +860,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text(
           _isEditMode ? 'product_action_edit'.tr() : 'add_product_title'.tr(),
@@ -601,13 +868,18 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       ),
       body: Stack(
         children: <Widget>[
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 170),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 170),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
                   Align(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(14),
@@ -656,25 +928,35 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  ProductAutocompleteField(
-                    controller: _nameController,
-                    search: ref
-                        .read(catalogRepositoryProvider)
-                        .autocompleteByName,
-                    onSelected: (CatalogItem item) {
-                      _categoryController.text = item.category;
-                      if ((item.defaultImagePath ?? '').isNotEmpty) {
-                        setState(() {
-                          _localImagePath = item.defaultImagePath;
-                        });
-                      }
-                    },
+                  Container(
+                    key: _nameFieldKey,
+                    child: ProductAutocompleteField(
+                      controller: _nameController,
+                      search: _searchNameSuggestions,
+                      onInteraction: () => _ensureAutocompleteVisible(_nameFieldKey),
+                      onSelected: (CatalogItem item) {
+                        _categoryController.text = item.category;
+                        _applyCategoryPresetIfExists(item.category);
+                        _barcodeController.text = item.barcode ?? '';
+                        if ((item.defaultImagePath ?? '').isNotEmpty) {
+                          setState(() {
+                            _localImagePath = item.defaultImagePath;
+                          });
+                        }
+                        _ensureAutocompleteVisible(_nameFieldKey);
+                      },
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  _CategoryAutocompleteField(
-                    controller: _categoryController,
-                    categories: _categoryPresets,
-                    onSelected: _applyCategoryPreset,
+                  Container(
+                    key: _categoryFieldKey,
+                    child: _CategoryAutocompleteField(
+                      controller: _categoryController,
+                      categories: _categoryPresets,
+                      onSelected: _applyCategoryPreset,
+                      onInteraction: () =>
+                          _ensureAutocompleteVisible(_categoryFieldKey),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -716,10 +998,28 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                       final DateFormat dateFmt = DateFormat.yMd(
                         context.locale.toString(),
                       );
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                          ),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.shadow.withValues(alpha: 0.06),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
                         child: Padding(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
@@ -727,13 +1027,31 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: <Widget>[
-                                  Text(
-                                    'add_product_batch_label'.tr(
-                                      namedArgs: <String, String>{
-                                        'n': '${index + 1}',
-                                      },
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
                                     ),
-                                    textScaler: TextScaler.linear(textScale),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .secondaryContainer,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      'add_product_batch_label'.tr(
+                                        namedArgs: <String, String>{
+                                          'n': '${index + 1}',
+                                        },
+                                      ),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSecondaryContainer,
+                                      ),
+                                      textScaler: TextScaler.linear(textScale),
+                                    ),
                                   ),
                                   Wrap(
                                     spacing: 4,
@@ -756,23 +1074,51 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 6),
                               Row(
                                 children: <Widget>[
-                                  Text('add_product_quantity'.tr()),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    onPressed: () => _changeQuantity(index, -1),
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline,
+                                  Text(
+                                    'add_product_quantity'.tr(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  Text('${batch.quantity}'),
-                                  IconButton(
-                                    onPressed: () => _changeQuantity(index, 1),
-                                    icon: const Icon(Icons.add_circle_outline),
+                                  const Spacer(),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        IconButton(
+                                          onPressed: () =>
+                                              _changeQuantity(index, -1),
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${batch.quantity}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () =>
+                                              _changeQuantity(index, 1),
+                                          icon: const Icon(
+                                            Icons.add_circle_outline,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
                               Row(
                                 children: <Widget>[
                                   Expanded(
@@ -818,57 +1164,70 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: <Widget>[
-                                  const Icon(
-                                    Icons.notifications_outlined,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  IconButton(
-                                    iconSize: 18,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: () =>
-                                        _changeNotifDays(index, -1),
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline,
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerLowest,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    const Icon(
+                                      Icons.notifications_outlined,
+                                      size: 16,
                                     ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    child: Text(
-                                      'add_product_notif_days'.tr(
-                                        namedArgs: <String, String>{
-                                          'days': '${batch.notifDaysBefore}',
-                                        },
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      iconSize: 18,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () =>
+                                          _changeNotifDays(index, -1),
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline,
                                       ),
-                                      textScaler: TextScaler.linear(textScale),
                                     ),
-                                  ),
-                                  IconButton(
-                                    iconSize: 18,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: () => _changeNotifDays(index, 1),
-                                    icon: const Icon(Icons.add_circle_outline),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  TextButton(
-                                    onPressed: () => _pickNotifTime(index),
-                                    child: Text(
-                                      'add_product_notif_at'.tr(
-                                        namedArgs: <String, String>{
-                                          'time': batch.notifTime,
-                                        },
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
                                       ),
-                                      textScaler: TextScaler.linear(textScale),
+                                      child: Text(
+                                        'add_product_notif_days'.tr(
+                                          namedArgs: <String, String>{
+                                            'days': '${batch.notifDaysBefore}',
+                                          },
+                                        ),
+                                        textScaler: TextScaler.linear(textScale),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    IconButton(
+                                      iconSize: 18,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () =>
+                                          _changeNotifDays(index, 1),
+                                      icon: const Icon(Icons.add_circle_outline),
+                                    ),
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: () => _pickNotifTime(index),
+                                      child: Text(
+                                        'add_product_notif_at'.tr(
+                                          namedArgs: <String, String>{
+                                            'time': batch.notifTime,
+                                          },
+                                        ),
+                                        textScaler: TextScaler.linear(textScale),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -878,12 +1237,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
-                        onPressed: () {
-                          final _DraftBatch last = _batches.last;
-                          setState(() {
-                            _batches.add(last.copyWith());
-                          });
-                        },
+                        onPressed: _addBatchWithDefaults,
                         icon: const Icon(Icons.add),
                         label: Text(
                           'add_product_add_batch'.tr(),
@@ -891,9 +1245,61 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                         ),
                       ),
                     ),
+                    if (_editingProduct != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Text(
+                        'consumption_history_header'.tr(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textScaler: TextScaler.linear(textScale),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_consumptionHistory.isEmpty)
+                        Text(
+                          'consumption_history_empty'.tr(),
+                          textScaler: TextScaler.linear(textScale),
+                        )
+                      else
+                        ..._consumptionHistory.map((ConsumptionEvent event) {
+                          final DateFormat timeFmt = DateFormat.yMd(
+                            context.locale.toString(),
+                          ).add_Hm();
+                          final String eventTime = timeFmt.format(
+                            event.createdAt.toLocal(),
+                          );
+                          final String actionLabel = event.action == 'trash'
+                              ? 'consumption_action_trash'.tr()
+                              : 'consumption_action_eaten'.tr();
+                          final String expiryDate = event.batchExpiryDate == null
+                              ? '-'
+                              : DateFormat.yMd(
+                                  context.locale.toString(),
+                                ).format(event.batchExpiryDate!.toLocal());
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              dense: true,
+                              title: Text(
+                                'consumption_history_item'.tr(
+                                  namedArgs: <String, String>{
+                                    'action': actionLabel,
+                                    'qty': '${event.quantity}',
+                                    'expiry': expiryDate,
+                                  },
+                                ),
+                              ),
+                              subtitle: Text(eventTime),
+                            ),
+                          );
+                        }),
+                    ],
+                    const SizedBox(height: 24),
                   ],
-                  const SizedBox(height: 24),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1001,11 +1407,13 @@ class _CategoryAutocompleteField extends StatefulWidget {
     required this.controller,
     required this.categories,
     required this.onSelected,
+    this.onInteraction,
   });
 
   final TextEditingController controller;
   final List<CategoryPreset> categories;
   final ValueChanged<CategoryPreset> onSelected;
+  final VoidCallback? onInteraction;
 
   @override
   State<_CategoryAutocompleteField> createState() =>
@@ -1042,6 +1450,7 @@ class _CategoryAutocompleteFieldState
 
   void _handleFocusChange() {
     if (_focusNode.hasFocus) {
+      widget.onInteraction?.call();
       _updateSuggestions();
       return;
     }
@@ -1072,6 +1481,7 @@ class _CategoryAutocompleteFieldState
       return;
     }
 
+    final bool hadSuggestions = _suggestions.isNotEmpty;
     final Iterable<CategoryPreset> filtered = widget.categories.where(
       (CategoryPreset preset) => preset.name.toLowerCase().contains(query),
     );
@@ -1080,9 +1490,17 @@ class _CategoryAutocompleteFieldState
       return;
     }
 
+    final List<CategoryPreset> next = filtered.take(8).toList(growable: false);
+    final bool hasExactMatch = next.any(
+      (CategoryPreset preset) => preset.name.trim().toLowerCase() == query,
+    );
+
     setState(() {
-      _suggestions = filtered.take(8).toList(growable: false);
+      _suggestions = hasExactMatch ? <CategoryPreset>[] : next;
     });
+    if (!hadSuggestions && _suggestions.isNotEmpty) {
+      widget.onInteraction?.call();
+    }
   }
 
   @override
@@ -1132,6 +1550,7 @@ class _CategoryAutocompleteFieldState
                       _suggestions = <CategoryPreset>[];
                     });
                     widget.onSelected(preset);
+                    widget.onInteraction?.call();
                   },
                 );
               },

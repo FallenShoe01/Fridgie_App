@@ -139,6 +139,22 @@ class ProductRepository {
         .toList(growable: false);
   }
 
+  Future<Product?> getByBarcode(String barcode) {
+    final String normalized = barcode.trim();
+    if (normalized.isEmpty) {
+      return Future<Product?>.value(null);
+    }
+
+    final Selectable<Product> query = _db.select(_db.products)
+      ..where((Products t) => t.barcode.equals(normalized))
+      ..orderBy(<OrderingTerm Function(Products)>[
+        (Products t) => OrderingTerm.desc(t.updatedAt),
+      ])
+      ..limit(1);
+
+    return query.getSingleOrNull();
+  }
+
   Future<List<ProductListItem>> getProductList({
     ProductSort sort = ProductSort.expiryAsc,
     String? status,

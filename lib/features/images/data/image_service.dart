@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:flutter/material.dart';
+import 'package:fridgie_app/features/images/presentation/image_cropper_page.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -21,34 +23,30 @@ class ImageService {
   final Future<Directory> Function() _documentsDirectoryProvider;
 
   Future<String?> pickCropAndStoreImage({
+    required BuildContext context,
     required String imageKey,
     required ImageSource source,
-    CropAspectRatio? cropAspectRatio,
   }) async {
     final XFile? picked = await _picker.pickImage(source: source);
     if (picked == null) {
       return null;
     }
 
-    final CroppedFile? cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      compressQuality: 88,
-      aspectRatio: cropAspectRatio ??
-          const CropAspectRatio(
-            ratioX: 1,
-            ratioY: 1,
-          ),
-      uiSettings: <PlatformUiSettings>[
-        AndroidUiSettings(
-          toolbarTitle: 'Crop image',
-          lockAspectRatio: true,
-          hideBottomControls: false,
-        ),
-      ],
-    );
+    final Uint8List bytes = await picked.readAsBytes();
+    if (!context.mounted) {
+      return null;
+    }
 
-    final String sourcePath = cropped?.path ?? picked.path;
-    return _copyToManagedStorage(sourcePath: sourcePath, imageKey: imageKey);
+    final Uint8List? croppedBytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute<Uint8List>(
+        builder: (_) => ImageCropperPage(imageBytes: bytes),
+      ),
+    );
+    if (croppedBytes == null) {
+      return null;
+    }
+
+    return _storeBytesToManagedStorage(bytes: croppedBytes, imageKey: imageKey);
   }
 
   Future<String?> downloadAndStoreImage({
@@ -78,17 +76,14 @@ class ImageService {
     }
   }
 
-  Future<String> _copyToManagedStorage({
-    required String sourcePath,
+  Future<String> _storeBytesToManagedStorage({
+    required Uint8List bytes,
     required String imageKey,
   }) async {
     final Directory imageDir = await _imageDirectoryForKey(imageKey);
-    final String extension = _safeExtension(sourcePath);
-    final String filename =
-        'img_${DateTime.now().millisecondsSinceEpoch}.$extension';
-
+    final String filename = 'img_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final File destination = File(p.join(imageDir.path, filename));
-    await File(sourcePath).copy(destination.path);
+    await destination.writeAsBytes(bytes, flush: true);
     return destination.path;
   }
 
@@ -112,14 +107,6 @@ class ImageService {
     final RegExp invalid = RegExp(r'[^a-zA-Z0-9_-]');
     final String sanitized = trimmed.replaceAll(invalid, '_');
     return sanitized.isEmpty ? 'unknown' : sanitized;
-  }
-
-  String _safeExtension(String sourcePath) {
-    final String ext = p.extension(sourcePath).replaceFirst('.', '').trim();
-    if (ext.isEmpty) {
-      return 'jpg';
-    }
-    return ext;
   }
 
   String _extensionFromUrl(String url) {

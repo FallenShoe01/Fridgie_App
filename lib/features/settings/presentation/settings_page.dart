@@ -64,6 +64,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _saveSettings() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final AppDatabase db = ref.read(dbProvider);
     final List<AppSettingsCompanion> updates = <AppSettingsCompanion>[
       AppSettingsCompanion(
@@ -219,15 +221,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text('settings_title'.tr()),
       ),
-        body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: <Widget>[
+      body: Stack(
+        children: <Widget>[
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                  child: ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                    children: <Widget>[
                 _sectionHeader('settings_appearance_header'.tr()),
                 SegmentedButton<ThemeMode>(
                   segments: <ButtonSegment<ThemeMode>>[
@@ -396,14 +408,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/background-reliability'),
                 ),
-              ],
+                    ],
+                  ),
+                ),
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, keyboardInset + 16),
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: FloatingActionButton.extended(
+                  onPressed: _isLoading ? null : _saveSettings,
+                  icon: const Icon(Icons.save),
+                  label: Text('settings_save'.tr()),
+                ),
+              ),
             ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _isLoading ? null : _saveSettings,
-          icon: const Icon(Icons.save),
-          label: Text('settings_save'.tr()),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          ),
+        ],
+      ),
     );
   }
 

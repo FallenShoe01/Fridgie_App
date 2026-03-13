@@ -63,6 +63,8 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
   }
 
   Future<void> _save() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (_product == null || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -222,9 +224,13 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
+            children: <Widget>[
             if (_product!.defaultImagePath != null &&
                 _product!.defaultImagePath!.isNotEmpty &&
                 File(_product!.defaultImagePath!).existsSync())
@@ -303,7 +309,7 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
                       ),
                     ),
                     subtitle: Text(
-                      '${' add_product_quantity'.tr()}: ${batch.quantity}',
+                      '${'add_product_quantity'.tr()}: ${batch.quantity}',
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline),
@@ -313,7 +319,8 @@ class _EditProductPageState extends ConsumerState<EditProductPage> {
                   ),
                 );
               }),
-          ],
+            ],
+          ),
         ),
       ),
     );

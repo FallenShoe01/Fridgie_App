@@ -83,6 +83,39 @@ class CategoryPresetStore {
     );
   }
 
+  Future<void> updateByName(String oldName, CategoryPreset newValue) async {
+    final String newName = newValue.name.trim();
+    if (newName.isEmpty) return;
+
+    final QueryRow? existing = await _db
+        .customSelect(
+          'SELECT id FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1',
+          variables: <Variable<Object>>[Variable<String>(oldName.trim())],
+          readsFrom: <ResultSetImplementation>{_db.categories},
+        )
+        .getSingleOrNull();
+
+    if (existing == null) {
+      // Insert as new if old not found
+      await _db.into(_db.categories).insert(
+        CategoriesCompanion.insert(
+          name: newName,
+          defaultExpiryDays: Value<int>(newValue.defaultExpiryDays),
+        ),
+      );
+      return;
+    }
+
+    await (_db.update(
+      _db.categories,
+    )..where((Categories t) => t.id.equals(existing.read<int>('id')))).write(
+      CategoriesCompanion(
+        name: Value<String>(newName),
+        defaultExpiryDays: Value<int>(newValue.defaultExpiryDays),
+      ),
+    );
+  }
+
   Future<void> deleteByName(String name) {
     return (_db.delete(
       _db.categories,

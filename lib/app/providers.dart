@@ -12,6 +12,7 @@ import 'package:fridgie_app/features/lookup/data/providers/open_food_facts_provi
 import 'package:fridgie_app/features/lookup/domain/product_lookup_provider.dart';
 import 'package:fridgie_app/features/notifications/data/notification_service.dart';
 import 'package:fridgie_app/features/products/data/batch_repository.dart';
+import 'package:fridgie_app/features/products/data/consumption_repository.dart';
 import 'package:fridgie_app/features/products/data/product_repository.dart';
 import 'package:fridgie_app/features/update/data/github_update_service.dart';
 
@@ -36,6 +37,11 @@ final catalogRepositoryProvider =
 final batchRepositoryProvider =
     Provider<BatchRepository>((Ref ref) {
   return BatchRepository(ref.read(dbProvider));
+});
+
+final consumptionRepositoryProvider =
+    Provider<ConsumptionRepository>((Ref ref) {
+  return ConsumptionRepository(ref.read(dbProvider));
 });
 
 final imageServiceProvider =

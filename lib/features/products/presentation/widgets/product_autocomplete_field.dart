@@ -13,11 +13,13 @@ class ProductAutocompleteField extends StatefulWidget {
     required this.controller,
     required this.search,
     required this.onSelected,
+    this.onInteraction,
   });
 
   final TextEditingController controller;
   final ProductSearch search;
   final ProductSelected onSelected;
+  final VoidCallback? onInteraction;
 
   @override
   State<ProductAutocompleteField> createState() => _ProductAutocompleteFieldState();
@@ -73,18 +75,45 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         return;
       }
 
+      final bool hadSuggestions = _suggestions.isNotEmpty;
       final List<CatalogItem> results = await widget.search(query);
       if (!mounted) {
         return;
       }
+      final String normalizedQuery = query.toLowerCase();
+      final List<CatalogItem> others = results.where(
+        (CatalogItem item) => item.canonicalName.trim().toLowerCase() != normalizedQuery,
+      ).toList(growable: false);
+
+      final bool hasExactMatch = results.length != others.length;
+
+      final List<CatalogItem> visible;
+      if (others.isNotEmpty) {
+        // Show other suggestions even if an exact match exists (e.g. "bread" matched "bread" and "bread rye").
+        visible = others;
+      } else if (hasExactMatch) {
+        // Only an exact match found — suppress suggestions.
+        visible = <CatalogItem>[];
+      } else {
+        // No exact match and no other-filtered: show all results.
+        visible = results;
+      }
 
       setState(() {
-        _suggestions = results;
+        _suggestions = visible;
       });
+      if (!hadSuggestions && visible.isNotEmpty) {
+        widget.onInteraction?.call();
+      }
     });
   }
 
   void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      widget.onInteraction?.call();
+      return;
+    }
+
     if (!_focusNode.hasFocus) {
       Future<void>.delayed(const Duration(milliseconds: 120), () {
         if (!mounted) {
@@ -108,6 +137,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
           decoration: InputDecoration(
             labelText: 'add_product_name_label'.tr(),
             border: const OutlineInputBorder(),
+            suffixIcon: const Icon(Icons.arrow_drop_down),
           ),
         ),
         if (_suggestions.isNotEmpty)

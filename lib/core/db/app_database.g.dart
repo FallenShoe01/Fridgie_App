@@ -2915,6 +2915,468 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItem> {
   }
 }
 
+class $ConsumptionEventsTable extends ConsumptionEvents
+    with TableInfo<$ConsumptionEventsTable, ConsumptionEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ConsumptionEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _productIdMeta = const VerificationMeta(
+    'productId',
+  );
+  @override
+  late final GeneratedColumn<int> productId = GeneratedColumn<int>(
+    'product_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES products (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _batchIdMeta = const VerificationMeta(
+    'batchId',
+  );
+  @override
+  late final GeneratedColumn<int> batchId = GeneratedColumn<int>(
+    'batch_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _quantityMeta = const VerificationMeta(
+    'quantity',
+  );
+  @override
+  late final GeneratedColumn<int> quantity = GeneratedColumn<int>(
+    'quantity',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _batchExpiryDateMeta = const VerificationMeta(
+    'batchExpiryDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> batchExpiryDate =
+      GeneratedColumn<DateTime>(
+        'batch_expiry_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    productId,
+    batchId,
+    action,
+    quantity,
+    batchExpiryDate,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'consumption_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ConsumptionEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(
+        _productIdMeta,
+        productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('batch_id')) {
+      context.handle(
+        _batchIdMeta,
+        batchId.isAcceptableOrUnknown(data['batch_id']!, _batchIdMeta),
+      );
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('quantity')) {
+      context.handle(
+        _quantityMeta,
+        quantity.isAcceptableOrUnknown(data['quantity']!, _quantityMeta),
+      );
+    }
+    if (data.containsKey('batch_expiry_date')) {
+      context.handle(
+        _batchExpiryDateMeta,
+        batchExpiryDate.isAcceptableOrUnknown(
+          data['batch_expiry_date']!,
+          _batchExpiryDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ConsumptionEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ConsumptionEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      productId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}product_id'],
+      )!,
+      batchId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}batch_id'],
+      ),
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      quantity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quantity'],
+      )!,
+      batchExpiryDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}batch_expiry_date'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ConsumptionEventsTable createAlias(String alias) {
+    return $ConsumptionEventsTable(attachedDatabase, alias);
+  }
+}
+
+class ConsumptionEvent extends DataClass
+    implements Insertable<ConsumptionEvent> {
+  final int id;
+  final int productId;
+  final int? batchId;
+  final String action;
+  final int quantity;
+  final DateTime? batchExpiryDate;
+  final DateTime createdAt;
+  const ConsumptionEvent({
+    required this.id,
+    required this.productId,
+    this.batchId,
+    required this.action,
+    required this.quantity,
+    this.batchExpiryDate,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['product_id'] = Variable<int>(productId);
+    if (!nullToAbsent || batchId != null) {
+      map['batch_id'] = Variable<int>(batchId);
+    }
+    map['action'] = Variable<String>(action);
+    map['quantity'] = Variable<int>(quantity);
+    if (!nullToAbsent || batchExpiryDate != null) {
+      map['batch_expiry_date'] = Variable<DateTime>(batchExpiryDate);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ConsumptionEventsCompanion toCompanion(bool nullToAbsent) {
+    return ConsumptionEventsCompanion(
+      id: Value(id),
+      productId: Value(productId),
+      batchId: batchId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(batchId),
+      action: Value(action),
+      quantity: Value(quantity),
+      batchExpiryDate: batchExpiryDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(batchExpiryDate),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ConsumptionEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ConsumptionEvent(
+      id: serializer.fromJson<int>(json['id']),
+      productId: serializer.fromJson<int>(json['productId']),
+      batchId: serializer.fromJson<int?>(json['batchId']),
+      action: serializer.fromJson<String>(json['action']),
+      quantity: serializer.fromJson<int>(json['quantity']),
+      batchExpiryDate: serializer.fromJson<DateTime?>(json['batchExpiryDate']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'productId': serializer.toJson<int>(productId),
+      'batchId': serializer.toJson<int?>(batchId),
+      'action': serializer.toJson<String>(action),
+      'quantity': serializer.toJson<int>(quantity),
+      'batchExpiryDate': serializer.toJson<DateTime?>(batchExpiryDate),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ConsumptionEvent copyWith({
+    int? id,
+    int? productId,
+    Value<int?> batchId = const Value.absent(),
+    String? action,
+    int? quantity,
+    Value<DateTime?> batchExpiryDate = const Value.absent(),
+    DateTime? createdAt,
+  }) => ConsumptionEvent(
+    id: id ?? this.id,
+    productId: productId ?? this.productId,
+    batchId: batchId.present ? batchId.value : this.batchId,
+    action: action ?? this.action,
+    quantity: quantity ?? this.quantity,
+    batchExpiryDate: batchExpiryDate.present
+        ? batchExpiryDate.value
+        : this.batchExpiryDate,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ConsumptionEvent copyWithCompanion(ConsumptionEventsCompanion data) {
+    return ConsumptionEvent(
+      id: data.id.present ? data.id.value : this.id,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      batchId: data.batchId.present ? data.batchId.value : this.batchId,
+      action: data.action.present ? data.action.value : this.action,
+      quantity: data.quantity.present ? data.quantity.value : this.quantity,
+      batchExpiryDate: data.batchExpiryDate.present
+          ? data.batchExpiryDate.value
+          : this.batchExpiryDate,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConsumptionEvent(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('batchId: $batchId, ')
+          ..write('action: $action, ')
+          ..write('quantity: $quantity, ')
+          ..write('batchExpiryDate: $batchExpiryDate, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    productId,
+    batchId,
+    action,
+    quantity,
+    batchExpiryDate,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ConsumptionEvent &&
+          other.id == this.id &&
+          other.productId == this.productId &&
+          other.batchId == this.batchId &&
+          other.action == this.action &&
+          other.quantity == this.quantity &&
+          other.batchExpiryDate == this.batchExpiryDate &&
+          other.createdAt == this.createdAt);
+}
+
+class ConsumptionEventsCompanion extends UpdateCompanion<ConsumptionEvent> {
+  final Value<int> id;
+  final Value<int> productId;
+  final Value<int?> batchId;
+  final Value<String> action;
+  final Value<int> quantity;
+  final Value<DateTime?> batchExpiryDate;
+  final Value<DateTime> createdAt;
+  const ConsumptionEventsCompanion({
+    this.id = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.batchId = const Value.absent(),
+    this.action = const Value.absent(),
+    this.quantity = const Value.absent(),
+    this.batchExpiryDate = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ConsumptionEventsCompanion.insert({
+    this.id = const Value.absent(),
+    required int productId,
+    this.batchId = const Value.absent(),
+    required String action,
+    this.quantity = const Value.absent(),
+    this.batchExpiryDate = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : productId = Value(productId),
+       action = Value(action);
+  static Insertable<ConsumptionEvent> custom({
+    Expression<int>? id,
+    Expression<int>? productId,
+    Expression<int>? batchId,
+    Expression<String>? action,
+    Expression<int>? quantity,
+    Expression<DateTime>? batchExpiryDate,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (productId != null) 'product_id': productId,
+      if (batchId != null) 'batch_id': batchId,
+      if (action != null) 'action': action,
+      if (quantity != null) 'quantity': quantity,
+      if (batchExpiryDate != null) 'batch_expiry_date': batchExpiryDate,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ConsumptionEventsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? productId,
+    Value<int?>? batchId,
+    Value<String>? action,
+    Value<int>? quantity,
+    Value<DateTime?>? batchExpiryDate,
+    Value<DateTime>? createdAt,
+  }) {
+    return ConsumptionEventsCompanion(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      batchId: batchId ?? this.batchId,
+      action: action ?? this.action,
+      quantity: quantity ?? this.quantity,
+      batchExpiryDate: batchExpiryDate ?? this.batchExpiryDate,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<int>(productId.value);
+    }
+    if (batchId.present) {
+      map['batch_id'] = Variable<int>(batchId.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (quantity.present) {
+      map['quantity'] = Variable<int>(quantity.value);
+    }
+    if (batchExpiryDate.present) {
+      map['batch_expiry_date'] = Variable<DateTime>(batchExpiryDate.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConsumptionEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('batchId: $batchId, ')
+          ..write('action: $action, ')
+          ..write('quantity: $quantity, ')
+          ..write('batchExpiryDate: $batchExpiryDate, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2925,6 +3387,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $CatalogItemsTable catalogItems = $CatalogItemsTable(this);
+  late final $ConsumptionEventsTable consumptionEvents =
+      $ConsumptionEventsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2937,6 +3401,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     appSettings,
     categories,
     catalogItems,
+    consumptionEvents,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -2953,6 +3418,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('product_images', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'products',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('consumption_events', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -3024,6 +3496,30 @@ final class $$ProductsTableReferences
     ).filter((f) => f.productId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_productImagesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ConsumptionEventsTable, List<ConsumptionEvent>>
+  _consumptionEventsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.consumptionEvents,
+        aliasName: $_aliasNameGenerator(
+          db.products.id,
+          db.consumptionEvents.productId,
+        ),
+      );
+
+  $$ConsumptionEventsTableProcessedTableManager get consumptionEventsRefs {
+    final manager = $$ConsumptionEventsTableTableManager(
+      $_db,
+      $_db.consumptionEvents,
+    ).filter((f) => f.productId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _consumptionEventsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3135,6 +3631,31 @@ class $$ProductsTableFilterComposer
           }) => $$ProductImagesTableFilterComposer(
             $db: $db,
             $table: $db.productImages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> consumptionEventsRefs(
+    Expression<bool> Function($$ConsumptionEventsTableFilterComposer f) f,
+  ) {
+    final $$ConsumptionEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.consumptionEvents,
+      getReferencedColumn: (t) => t.productId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConsumptionEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.consumptionEvents,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3309,6 +3830,32 @@ class $$ProductsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> consumptionEventsRefs<T extends Object>(
+    Expression<T> Function($$ConsumptionEventsTableAnnotationComposer a) f,
+  ) {
+    final $$ConsumptionEventsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.consumptionEvents,
+          getReferencedColumn: (t) => t.productId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ConsumptionEventsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.consumptionEvents,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ProductsTableTableManager
@@ -3327,6 +3874,7 @@ class $$ProductsTableTableManager
           PrefetchHooks Function({
             bool productBatchesRefs,
             bool productImagesRefs,
+            bool consumptionEventsRefs,
           })
         > {
   $$ProductsTableTableManager(_$AppDatabase db, $ProductsTable table)
@@ -3401,12 +3949,17 @@ class $$ProductsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({productBatchesRefs = false, productImagesRefs = false}) {
+              ({
+                productBatchesRefs = false,
+                productImagesRefs = false,
+                consumptionEventsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (productBatchesRefs) db.productBatches,
                     if (productImagesRefs) db.productImages,
+                    if (consumptionEventsRefs) db.consumptionEvents,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -3453,6 +4006,27 @@ class $$ProductsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (consumptionEventsRefs)
+                        await $_getPrefetchedData<
+                          Product,
+                          $ProductsTable,
+                          ConsumptionEvent
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProductsTableReferences
+                              ._consumptionEventsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProductsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).consumptionEventsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.productId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -3473,7 +4047,11 @@ typedef $$ProductsTableProcessedTableManager =
       $$ProductsTableUpdateCompanionBuilder,
       (Product, $$ProductsTableReferences),
       Product,
-      PrefetchHooks Function({bool productBatchesRefs, bool productImagesRefs})
+      PrefetchHooks Function({
+        bool productBatchesRefs,
+        bool productImagesRefs,
+        bool consumptionEventsRefs,
+      })
     >;
 typedef $$ProductBatchesTableCreateCompanionBuilder =
     ProductBatchesCompanion Function({
@@ -4936,6 +5514,375 @@ typedef $$CatalogItemsTableProcessedTableManager =
       CatalogItem,
       PrefetchHooks Function()
     >;
+typedef $$ConsumptionEventsTableCreateCompanionBuilder =
+    ConsumptionEventsCompanion Function({
+      Value<int> id,
+      required int productId,
+      Value<int?> batchId,
+      required String action,
+      Value<int> quantity,
+      Value<DateTime?> batchExpiryDate,
+      Value<DateTime> createdAt,
+    });
+typedef $$ConsumptionEventsTableUpdateCompanionBuilder =
+    ConsumptionEventsCompanion Function({
+      Value<int> id,
+      Value<int> productId,
+      Value<int?> batchId,
+      Value<String> action,
+      Value<int> quantity,
+      Value<DateTime?> batchExpiryDate,
+      Value<DateTime> createdAt,
+    });
+
+final class $$ConsumptionEventsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ConsumptionEventsTable,
+          ConsumptionEvent
+        > {
+  $$ConsumptionEventsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProductsTable _productIdTable(_$AppDatabase db) =>
+      db.products.createAlias(
+        $_aliasNameGenerator(db.consumptionEvents.productId, db.products.id),
+      );
+
+  $$ProductsTableProcessedTableManager get productId {
+    final $_column = $_itemColumn<int>('product_id')!;
+
+    final manager = $$ProductsTableTableManager(
+      $_db,
+      $_db.products,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_productIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ConsumptionEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $ConsumptionEventsTable> {
+  $$ConsumptionEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get batchExpiryDate => $composableBuilder(
+    column: $table.batchExpiryDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProductsTableFilterComposer get productId {
+    final $$ProductsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productId,
+      referencedTable: $db.products,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProductsTableFilterComposer(
+            $db: $db,
+            $table: $db.products,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ConsumptionEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ConsumptionEventsTable> {
+  $$ConsumptionEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get batchId => $composableBuilder(
+    column: $table.batchId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get batchExpiryDate => $composableBuilder(
+    column: $table.batchExpiryDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProductsTableOrderingComposer get productId {
+    final $$ProductsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productId,
+      referencedTable: $db.products,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProductsTableOrderingComposer(
+            $db: $db,
+            $table: $db.products,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ConsumptionEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ConsumptionEventsTable> {
+  $$ConsumptionEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get batchId =>
+      $composableBuilder(column: $table.batchId, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<int> get quantity =>
+      $composableBuilder(column: $table.quantity, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get batchExpiryDate => $composableBuilder(
+    column: $table.batchExpiryDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ProductsTableAnnotationComposer get productId {
+    final $$ProductsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productId,
+      referencedTable: $db.products,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProductsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.products,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ConsumptionEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ConsumptionEventsTable,
+          ConsumptionEvent,
+          $$ConsumptionEventsTableFilterComposer,
+          $$ConsumptionEventsTableOrderingComposer,
+          $$ConsumptionEventsTableAnnotationComposer,
+          $$ConsumptionEventsTableCreateCompanionBuilder,
+          $$ConsumptionEventsTableUpdateCompanionBuilder,
+          (ConsumptionEvent, $$ConsumptionEventsTableReferences),
+          ConsumptionEvent,
+          PrefetchHooks Function({bool productId})
+        > {
+  $$ConsumptionEventsTableTableManager(
+    _$AppDatabase db,
+    $ConsumptionEventsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ConsumptionEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ConsumptionEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ConsumptionEventsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> productId = const Value.absent(),
+                Value<int?> batchId = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<int> quantity = const Value.absent(),
+                Value<DateTime?> batchExpiryDate = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ConsumptionEventsCompanion(
+                id: id,
+                productId: productId,
+                batchId: batchId,
+                action: action,
+                quantity: quantity,
+                batchExpiryDate: batchExpiryDate,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int productId,
+                Value<int?> batchId = const Value.absent(),
+                required String action,
+                Value<int> quantity = const Value.absent(),
+                Value<DateTime?> batchExpiryDate = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ConsumptionEventsCompanion.insert(
+                id: id,
+                productId: productId,
+                batchId: batchId,
+                action: action,
+                quantity: quantity,
+                batchExpiryDate: batchExpiryDate,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ConsumptionEventsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({productId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (productId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.productId,
+                                referencedTable:
+                                    $$ConsumptionEventsTableReferences
+                                        ._productIdTable(db),
+                                referencedColumn:
+                                    $$ConsumptionEventsTableReferences
+                                        ._productIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ConsumptionEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ConsumptionEventsTable,
+      ConsumptionEvent,
+      $$ConsumptionEventsTableFilterComposer,
+      $$ConsumptionEventsTableOrderingComposer,
+      $$ConsumptionEventsTableAnnotationComposer,
+      $$ConsumptionEventsTableCreateCompanionBuilder,
+      $$ConsumptionEventsTableUpdateCompanionBuilder,
+      (ConsumptionEvent, $$ConsumptionEventsTableReferences),
+      ConsumptionEvent,
+      PrefetchHooks Function({bool productId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4954,4 +5901,6 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$CatalogItemsTableTableManager get catalogItems =>
       $$CatalogItemsTableTableManager(_db, _db.catalogItems);
+  $$ConsumptionEventsTableTableManager get consumptionEvents =>
+      $$ConsumptionEventsTableTableManager(_db, _db.consumptionEvents);
 }

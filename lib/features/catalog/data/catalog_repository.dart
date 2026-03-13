@@ -112,6 +112,17 @@ class CatalogRepository {
     return query.getSingleOrNull();
   }
 
+  Future<CatalogItem?> getByBarcode(String barcode) {
+    final String normalized = barcode.trim();
+    if (normalized.isEmpty) return Future.value(null);
+
+    final Selectable<CatalogItem> query = _db.select(_db.catalogItems)
+      ..where((CatalogItems t) => t.barcode.equals(normalized))
+      ..limit(1);
+
+    return query.getSingleOrNull();
+  }
+
   Future<void> deleteById(int id) {
     return (_db.delete(
       _db.catalogItems,

@@ -115,6 +115,24 @@ class CatalogItems extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+@DataClassName('ConsumptionEvent')
+class ConsumptionEvents extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  IntColumn get productId =>
+      integer().references(Products, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get batchId => integer().nullable()();
+
+  TextColumn get action => text()();
+
+  IntColumn get quantity => integer().withDefault(const Constant(1))();
+
+  DateTimeColumn get batchExpiryDate => dateTime().nullable()();
+
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 @DriftDatabase(
   tables: <Type>[
     Products,
@@ -124,13 +142,14 @@ class CatalogItems extends Table {
     AppSettings,
     Categories,
     CatalogItems,
+    ConsumptionEvents,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor}) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,6 +176,12 @@ class AppDatabase extends _$AppDatabase {
       );
       await customStatement(
         'CREATE INDEX IF NOT EXISTS idx_catalog_items_barcode ON catalog_items(barcode);',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_consumption_events_product_id ON consumption_events(product_id);',
+      );
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_consumption_events_created_at ON consumption_events(created_at);',
       );
 
       await _seedDefaultSettings();
@@ -189,6 +214,15 @@ class AppDatabase extends _$AppDatabase {
         );
         await customStatement(
           'CREATE INDEX IF NOT EXISTS idx_catalog_items_barcode ON catalog_items(barcode);',
+        );
+      }
+      if (from < 5) {
+        await m.createTable(consumptionEvents);
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_consumption_events_product_id ON consumption_events(product_id);',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_consumption_events_created_at ON consumption_events(created_at);',
         );
       }
     },
