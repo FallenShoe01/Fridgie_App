@@ -115,17 +115,23 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   }
 
   Future<void> _scanAndAdd() async {
+    final Stopwatch sheetTimer = Stopwatch()..start();
+    debugPrint('[ScannerPerf] ProductList: opening scanner sheet');
     final String? scanned = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (_) => const BarcodeScannerSheet(),
     );
+    debugPrint('[ScannerPerf] ProductList: scanner sheet returned in ${sheetTimer.elapsedMilliseconds}ms');
 
     if (!mounted || scanned == null || scanned.trim().isEmpty) {
+      debugPrint('[ScannerPerf] ProductList: no scanned code returned');
       return;
     }
 
     final String barcode = scanned.trim();
+    debugPrint('[ScannerPerf] ProductList: scanned code=$barcode');
+    final Stopwatch addFlowTimer = Stopwatch()..start();
     final DateTime now = DateTime.now();
     final DateTime scanDate = DateTime(now.year, now.month, now.day);
 
@@ -134,6 +140,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final notificationService = ref.read(notificationServiceProvider);
 
     final Product? existingProduct = await productRepository.getByBarcode(barcode);
+    debugPrint('[ScannerPerf] ProductList: getByBarcode done (exists=${existingProduct != null})');
     if (existingProduct != null) {
       final List<ProductBatch> existingBatches = await batchRepository
           .getBatchesByProduct(existingProduct.id);
@@ -155,6 +162,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         await batchRepository.updateBatch(
           sameDayBatch.copyWith(quantity: sameDayBatch.quantity + 1),
         );
+        debugPrint('[ScannerPerf] ProductList: updated same-day batch quantity');
       } else {
         final ProductBatch? template =
             existingBatches.isEmpty ? null : existingBatches.last;
@@ -195,18 +203,22 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
             hhmm: notifTime,
           ),
         );
+        debugPrint('[ScannerPerf] ProductList: created new batch and scheduled notification');
       }
 
       await productRepository.restoreActive(existingProduct.id);
       if (!mounted) return;
       showTopSnackBar(context, 'product_scan_batch_added'.tr());
       setState(_refreshList);
+      debugPrint('[ScannerPerf] ProductList: existing-product flow finished in ${addFlowTimer.elapsedMilliseconds}ms');
       return;
     }
 
     final String scanDateIso = scanDate.toIso8601String();
     final catalogRepo = ref.read(catalogRepositoryProvider);
+    final Stopwatch catalogLookupTimer = Stopwatch()..start();
     final catalogItem = await catalogRepo.getByBarcode(barcode);
+    debugPrint('[ScannerPerf] ProductList: catalog lookup in ${catalogLookupTimer.elapsedMilliseconds}ms (hit=${catalogItem != null})');
     if (catalogItem != null) {
       if (!mounted) return;
       final String url =
@@ -216,8 +228,46 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       return;
     }
 
+    final AppDatabase db = ref.read(dbProvider);
+    final AppSetting? lookupRow = await (db.select(db.appSettings)
+          ..where(
+            (AppSettings t) => t.key.equals('lookup_open_food_facts_enabled'),
+          ))
+        .getSingleOrNull();
+    final bool isInternetSearchEnabled =
+        (lookupRow?.value.trim().toLowerCase() ?? 'true') == 'true';
+    if (!isInternetSearchEnabled) {
+      if (mounted) {
+        showTopSnackBar(
+          context,
+          'add_product_enable_internet_search_in_settings'.tr(),
+        );
+      }
+      if (!mounted) return;
+      final bool? added = await context.push<bool>(
+        '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initScanDate=${Uri.encodeComponent(scanDateIso)}',
+      );
+      if (added == true && mounted) setState(_refreshList);
+      debugPrint('[ScannerPerf] ProductList: internet search disabled by settings, skipped remote lookup');
+      return;
+    }
+
     final lookupService = ref.read(productLookupServiceProvider);
-    final result = await lookupService.lookupByBarcode(barcode);
+    final Stopwatch remoteLookupTimer = Stopwatch()..start();
+    dynamic result;
+    bool internetSourceUnreachable = false;
+    try {
+      result = await lookupService
+          .lookupByBarcode(barcode)
+          .timeout(const Duration(seconds: 4));
+    } on TimeoutException {
+      internetSourceUnreachable = true;
+      debugPrint('[ScannerPerf] ProductList: remote lookup timeout after 4000ms, continuing without network prefill');
+    } catch (e) {
+      internetSourceUnreachable = true;
+      debugPrint('[ScannerPerf] ProductList: remote lookup failed: $e');
+    }
+    debugPrint('[ScannerPerf] ProductList: remote lookup in ${remoteLookupTimer.elapsedMilliseconds}ms (hit=${result != null})');
     if (result != null) {
       if (!mounted) return;
       final String nameEnc = Uri.encodeComponent(result.name);
@@ -230,10 +280,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     }
 
     if (!mounted) return;
+    if (internetSourceUnreachable) {
+      showTopSnackBar(context, 'add_product_online_source_unreachable'.tr());
+    }
     final bool? added = await context.push<bool>(
       '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initScanDate=${Uri.encodeComponent(scanDateIso)}',
     );
     if (added == true && mounted) setState(_refreshList);
+    debugPrint('[ScannerPerf] ProductList: full scan-and-add flow finished in ${addFlowTimer.elapsedMilliseconds}ms');
   }
 
   bool _isSameDay(DateTime a, DateTime b) {

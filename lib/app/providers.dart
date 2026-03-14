@@ -52,7 +52,7 @@ final imageServiceProvider =
 final productLookupProvidersProvider =
     Provider<List<ProductLookupProvider>>((Ref ref) {
   return <ProductLookupProvider>[
-    OpenFoodFactsProvider(dio: ref.read(dioProvider)),
+    OpenFoodFactsProvider(db: ref.read(dbProvider)),
   ];
 });
 

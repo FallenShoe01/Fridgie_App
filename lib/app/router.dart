@@ -1,5 +1,6 @@
 import 'package:fridgie_app/app/presentation/main_shell_page.dart';
 import 'package:fridgie_app/features/backup/presentation/backup_page.dart';
+import 'package:fridgie_app/features/settings/presentation/off_settings_page.dart';
 import 'package:fridgie_app/features/catalog/presentation/catalog_page.dart';
 import 'package:fridgie_app/features/home/presentation/main_dashboard_page.dart';
 import 'package:fridgie_app/features/products/presentation/add_product_page.dart';
@@ -78,6 +79,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/backup',
       builder: (context, state) => const BackupPage(),
+    ),
+    GoRoute(
+      path: '/off-settings',
+      builder: (context, state) => const OffSettingsPage(),
     ),
   ],
 );

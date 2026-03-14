@@ -65,6 +65,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   List<CategoryPreset> _categoryPresets = <CategoryPreset>[];
   int _settingsDefaultNotificationDaysBefore = 3;
   String _settingsDefaultNotificationTime = '09:00';
+  bool _isInternetSearchEnabled = true;
   Product? _editingProduct;
   CatalogItem? _editingCatalogItem;
   List<ConsumptionEvent> _consumptionHistory = <ConsumptionEvent>[];
@@ -271,6 +272,8 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     final int notifDays =
         int.tryParse(map['default_notification_days_before'] ?? '') ?? 3;
     final String notifTimeRaw = map['default_notification_time_local'] ?? '09:00';
+    final String lookupEnabledRaw =
+      (map['lookup_open_food_facts_enabled'] ?? 'true').trim().toLowerCase();
     if (!mounted) {
       return;
     }
@@ -278,6 +281,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     setState(() {
       _settingsDefaultNotificationDaysBefore = notifDays.clamp(0, 365);
       _settingsDefaultNotificationTime = _normalizeTime(notifTimeRaw);
+      _isInternetSearchEnabled = lookupEnabledRaw == 'true';
 
       if (!_isEditMode && _batches.isNotEmpty) {
         final _DraftBatch first = _batches.first;
@@ -455,17 +459,37 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   }
 
   Future<void> _scanBarcode() async {
+    final Stopwatch sheetTimer = Stopwatch()..start();
+    debugPrint('[ScannerPerf] AddProduct: opening scanner sheet');
     final String? scanned = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (_) => const BarcodeScannerSheet(),
     );
+    debugPrint('[ScannerPerf] AddProduct: scanner sheet returned in ${sheetTimer.elapsedMilliseconds}ms');
 
     if (!mounted || scanned == null || scanned.trim().isEmpty) {
+      debugPrint('[ScannerPerf] AddProduct: no scanned code returned');
       return;
     }
 
     _barcodeController.text = scanned.trim();
+    debugPrint('[ScannerPerf] AddProduct: scanned code=${_barcodeController.text}');
+    final Stopwatch lookupTimer = Stopwatch()..start();
+    await _onSearchWorldDatabasePressed();
+    debugPrint('[ScannerPerf] AddProduct: _lookupFromBarcode completed in ${lookupTimer.elapsedMilliseconds}ms');
+  }
+
+  Future<void> _onSearchWorldDatabasePressed() async {
+    if (!_isInternetSearchEnabled) {
+      if (!mounted) return;
+      showTopSnackBar(
+        context,
+        'add_product_enable_internet_search_in_settings'.tr(),
+      );
+      return;
+    }
+
     await _lookupFromBarcode();
   }
 
@@ -474,6 +498,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     if (barcode.isEmpty) {
       return;
     }
+
+    final Stopwatch totalLookupTimer = Stopwatch()..start();
+    debugPrint('[ScannerPerf] Lookup start for barcode=$barcode');
 
     setState(() {
       _isLoadingLookup = true;
@@ -484,7 +511,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
     // First: check local catalog by barcode
     final catalogRepo = ref.read(catalogRepositoryProvider);
+    final Stopwatch localLookupTimer = Stopwatch()..start();
     final CatalogItem? catalogItem = await catalogRepo.getByBarcode(barcode);
+    debugPrint('[ScannerPerf] Local catalog lookup in ${localLookupTimer.elapsedMilliseconds}ms (hit=${catalogItem != null})');
 
     if (!mounted) return;
 
@@ -503,11 +532,26 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       setState(() {
         _isLoadingLookup = false;
       });
+      debugPrint('[ScannerPerf] Lookup done via local catalog in ${totalLookupTimer.elapsedMilliseconds}ms');
       return;
     }
 
     // Fallback: world lookup providers
-    final LookupResult? result = await lookupService.lookupByBarcode(barcode);
+    final Stopwatch remoteLookupTimer = Stopwatch()..start();
+    LookupResult? result;
+    bool internetSourceUnreachable = false;
+    try {
+      result = await lookupService
+          .lookupByBarcode(barcode)
+          .timeout(const Duration(seconds: 4));
+    } on TimeoutException {
+      internetSourceUnreachable = true;
+      debugPrint('[ScannerPerf] AddProduct: remote lookup timeout after 4000ms');
+    } catch (e) {
+      internetSourceUnreachable = true;
+      debugPrint('[ScannerPerf] AddProduct: remote lookup failed: $e');
+    }
+    debugPrint('[ScannerPerf] Remote lookup in ${remoteLookupTimer.elapsedMilliseconds}ms (hit=${result != null})');
 
     if (!mounted) {
       return;
@@ -523,6 +567,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
           imageUrl: result.imageUrl!,
           imageKey: barcode,
         );
+        debugPrint('[ScannerPerf] Image download/store completed for barcode=$barcode');
 
         if (!mounted) {
           return;
@@ -537,12 +582,18 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
       showTopSnackBar(context, 'add_product_found'.tr());
     } else {
-      showTopSnackBar(context, 'add_product_not_found'.tr());
+      showTopSnackBar(
+        context,
+        internetSourceUnreachable
+            ? 'add_product_online_source_unreachable'.tr()
+            : 'add_product_not_found'.tr(),
+      );
     }
 
     setState(() {
       _isLoadingLookup = false;
     });
+    debugPrint('[ScannerPerf] Lookup finished in ${totalLookupTimer.elapsedMilliseconds}ms');
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -969,7 +1020,19 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                   const SizedBox(height: 8),
                   Center(
                     child: FilledButton.tonal(
-                      onPressed: _isLoadingLookup ? null : _lookupFromBarcode,
+                      style: !_isInternetSearchEnabled
+                          ? FilledButton.styleFrom(
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              foregroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            )
+                          : null,
+                      onPressed: _isLoadingLookup
+                          ? null
+                          : _onSearchWorldDatabasePressed,
                       child: Text(
                         _isLoadingLookup
                             ? 'add_product_searching'.tr()

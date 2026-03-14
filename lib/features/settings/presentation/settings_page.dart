@@ -29,6 +29,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   ThemeMode _themeMode = ThemeMode.system;
   AppAccent _accent = AppAccent.teal;
   String _localeCode = 'en';
+  bool _internetSearchEnabled = true;
+  bool _offLoggedIn = false;
   String? _appVersion;
 
   @override
@@ -72,6 +74,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _daysCtrl.text = map['default_notification_days_before'] ?? '3';
         _expiringDaysCtrl.text = map['main_expiring_soon_days'] ?? '3';
         _timeCtrl.text = map['default_notification_time_local'] ?? '09:00';
+        final String lookupEnabledRaw =
+            (map['lookup_open_food_facts_enabled'] ?? 'true').trim().toLowerCase();
+        _internetSearchEnabled = lookupEnabledRaw == 'true';
+        _offLoggedIn =
+            (map['lookup_off_logged_in'] ?? 'false').trim().toLowerCase() == 'true';
         if (pkg != null) {
           _appVersion = 'v${pkg.version}+${pkg.buildNumber}';
         }
@@ -127,6 +134,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       AppSettingsCompanion(
         key: const drift.Value('ui_locale'),
         value: drift.Value(_localeCode),
+      ),
+      AppSettingsCompanion(
+        key: const drift.Value('lookup_open_food_facts_enabled'),
+        value: drift.Value(_internetSearchEnabled.toString()),
       ),
     ];
     for (final AppSettingsCompanion u in updates) {
@@ -485,6 +496,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           ),
                         ],
                       ),
+                      // _block(
+                      //   title: 'settings_off_page_title'.tr(),
+                      //   children: <Widget>[
+                      //     ListTile(
+                      //       contentPadding: EdgeInsets.zero,
+                      //       leading: Icon(
+                      //         _internetSearchEnabled
+                      //             ? Icons.public
+                      //             : Icons.public_off,
+                      //         color: _internetSearchEnabled
+                      //             ? Theme.of(context).colorScheme.primary
+                      //             : Theme.of(context).colorScheme.onSurfaceVariant,
+                      //       ),
+                      //       title: Text('settings_off_page_title'.tr()),
+                      //       subtitle: Text(
+                      //         _offLoggedIn
+                      //             ? 'settings_off_summary_logged_in'.tr()
+                      //             : (_internetSearchEnabled
+                      //                 ? 'settings_off_summary_enabled_no_account'.tr()
+                      //                 : 'settings_off_summary_disabled'.tr()),
+                      //       ),
+                      //       trailing: const Icon(Icons.chevron_right),
+                      //       onTap: () async {
+                      //         await context.push('/off-settings');
+                      //         if (mounted) await _loadSettings();
+                      //       },
+                      //     ),
+                      //   ],
+                      // ),
                       _block(
                         title: 'settings_ota_header'.tr(),
                         children: <Widget>[

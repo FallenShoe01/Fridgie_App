@@ -10,9 +10,16 @@ import 'package:fridgie_app/app/providers.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/backup/data/backup_service.dart';
 import 'package:fridgie_app/features/notifications/data/notification_service.dart';
+import 'package:openfoodfacts/openfoodfacts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  OpenFoodAPIConfiguration.userAgent = UserAgent(
+    name: 'Fridgie',
+    version: '0.2.11',
+    url: 'https://github.com/openfoodfacts/openfoodfacts-dart',
+    comment: 'fridgie-app',
+  );
   await EasyLocalization.ensureInitialized();
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
