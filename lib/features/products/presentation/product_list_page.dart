@@ -9,6 +9,8 @@ import 'package:fridgie_app/app/providers.dart';
 import 'package:fridgie_app/features/products/presentation/widgets/barcode_scanner_sheet.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
 import 'package:fridgie_app/features/categories/data/category_preset_store.dart';
+import 'package:fridgie_app/features/notifications/data/notification_service.dart';
+import 'package:fridgie_app/features/products/data/batch_repository.dart';
 import 'package:fridgie_app/features/products/data/product_repository.dart';
 import 'package:fridgie_app/shared/top_snackbar.dart';
 import 'package:go_router/go_router.dart';
@@ -142,75 +144,14 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final Product? existingProduct = await productRepository.getByBarcode(barcode);
     debugPrint('[ScannerPerf] ProductList: getByBarcode done (exists=${existingProduct != null})');
     if (existingProduct != null) {
-      final List<ProductBatch> existingBatches = await batchRepository
-          .getBatchesByProduct(existingProduct.id);
-
-      ProductBatch? sameDayBatch;
-      for (final ProductBatch batch in existingBatches) {
-        final DateTime batchDay = DateTime(
-          (batch.buyDate ?? batch.createdAt).year,
-          (batch.buyDate ?? batch.createdAt).month,
-          (batch.buyDate ?? batch.createdAt).day,
-        );
-        if (_isSameDay(batchDay, scanDate)) {
-          sameDayBatch = batch;
-          break;
-        }
-      }
-
-      if (sameDayBatch != null) {
-        await batchRepository.updateBatch(
-          sameDayBatch.copyWith(quantity: sameDayBatch.quantity + 1),
-        );
-        debugPrint('[ScannerPerf] ProductList: updated same-day batch quantity');
-      } else {
-        final ProductBatch? template =
-            existingBatches.isEmpty ? null : existingBatches.last;
-        final int notifDays = template?.notificationDaysBefore ?? 3;
-        final String notifTime = template?.notificationTimeLocal ?? '09:00';
-
-        final int shelfLifeDays;
-        if (template == null) {
-          shelfLifeDays = 7;
-        } else {
-          final DateTime templateBuy = template.buyDate ??
-              template.expiryDate.subtract(const Duration(days: 7));
-          final int diff = template.expiryDate
-              .difference(DateTime(templateBuy.year, templateBuy.month, templateBuy.day))
-              .inDays;
-          shelfLifeDays = diff <= 0 ? 7 : diff;
-        }
-
-        final DateTime expiryDate = scanDate.add(Duration(days: shelfLifeDays));
-        final int batchId = await batchRepository.createBatch(
-          ProductBatchesCompanion.insert(
-            productId: existingProduct.id,
-            buyDate: drift.Value<DateTime>(scanDate),
-            expiryDate: expiryDate,
-            quantity: const drift.Value<int>(1),
-            notificationDaysBefore: drift.Value<int>(notifDays),
-            notificationTimeLocal: drift.Value<String>(notifTime),
-          ),
-        );
-
-        unawaited(
-          notificationService.scheduleExpiryNotification(
-            notificationId: batchId,
-            title: 'Expiry reminder',
-            body: '${existingProduct.canonicalName} expires soon',
-            expiryDate: expiryDate,
-            daysBefore: notifDays,
-            hhmm: notifTime,
-          ),
-        );
-        debugPrint('[ScannerPerf] ProductList: created new batch and scheduled notification');
-      }
-
-      await productRepository.restoreActive(existingProduct.id);
-      if (!mounted) return;
-      showTopSnackBar(context, 'product_scan_batch_added'.tr());
-      setState(_refreshList);
-      debugPrint('[ScannerPerf] ProductList: existing-product flow finished in ${addFlowTimer.elapsedMilliseconds}ms');
+      await _addScanToExistingProduct(
+        existingProduct: existingProduct,
+        scanDate: scanDate,
+        batchRepository: batchRepository,
+        productRepository: productRepository,
+        notificationService: notificationService,
+        addFlowTimer: addFlowTimer,
+      );
       return;
     }
 
@@ -220,6 +161,37 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final catalogItem = await catalogRepo.getByBarcode(barcode);
     debugPrint('[ScannerPerf] ProductList: catalog lookup in ${catalogLookupTimer.elapsedMilliseconds}ms (hit=${catalogItem != null})');
     if (catalogItem != null) {
+      final Product? byCatalogIdentity = await productRepository
+          .getLatestByCanonicalName(
+            catalogItem.canonicalName,
+            category: catalogItem.category,
+          );
+      debugPrint(
+        '[ScannerPerf] ProductList: fallback by catalog identity matched existing product=${byCatalogIdentity != null}',
+      );
+      if (byCatalogIdentity != null) {
+        if ((byCatalogIdentity.barcode ?? '').trim() != barcode) {
+          await productRepository.updateProduct(
+            byCatalogIdentity.copyWith(
+              barcode: drift.Value<String?>(barcode),
+            ),
+          );
+          debugPrint(
+            '[ScannerPerf] ProductList: synced missing/mismatched product barcode for productId=${byCatalogIdentity.id} to $barcode',
+          );
+        }
+
+        await _addScanToExistingProduct(
+          existingProduct: byCatalogIdentity,
+          scanDate: scanDate,
+          batchRepository: batchRepository,
+          productRepository: productRepository,
+          notificationService: notificationService,
+          addFlowTimer: addFlowTimer,
+        );
+        return;
+      }
+
       if (!mounted) return;
       final String url =
           '/add-product?initBarcode=${Uri.encodeComponent(barcode)}&initName=${Uri.encodeComponent(catalogItem.canonicalName)}&initCategory=${Uri.encodeComponent(catalogItem.category)}&initScanDate=${Uri.encodeComponent(scanDateIso)}';
@@ -292,6 +264,118 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Future<void> _addScanToExistingProduct({
+    required Product existingProduct,
+    required DateTime scanDate,
+    required BatchRepository batchRepository,
+    required ProductRepository productRepository,
+    required NotificationService notificationService,
+    required Stopwatch addFlowTimer,
+  }) async {
+    debugPrint(
+      '[ScannerPerf] ProductList: matched product id=${existingProduct.id}, status=${existingProduct.status}, storedBarcode=${existingProduct.barcode}',
+    );
+    final List<ProductBatch> existingBatches = await batchRepository
+        .getBatchesByProduct(existingProduct.id);
+    debugPrint(
+      '[ScannerPerf] ProductList: existing batches for product=${existingProduct.id} -> count=${existingBatches.length}',
+    );
+    for (final ProductBatch batch in existingBatches) {
+      final DateTime reference = batch.buyDate ?? batch.createdAt;
+      debugPrint(
+        '[ScannerPerf] ProductList: batch id=${batch.id}, qty=${batch.quantity}, buyDate=${batch.buyDate?.toIso8601String()}, createdAt=${batch.createdAt.toIso8601String()}, refDay=${DateTime(reference.year, reference.month, reference.day).toIso8601String()}',
+      );
+    }
+
+    ProductBatch? sameDayBatch;
+    for (final ProductBatch batch in existingBatches) {
+      final DateTime reference = (batch.buyDate ?? batch.createdAt).toLocal();
+      final DateTime batchDay = DateTime(
+        reference.year,
+        reference.month,
+        reference.day,
+      );
+      if (_isSameDay(batchDay, scanDate)) {
+        sameDayBatch = batch;
+        break;
+      }
+    }
+
+    if (sameDayBatch != null) {
+      final int nextQuantity = sameDayBatch.quantity + 1;
+      debugPrint(
+        '[ScannerPerf] ProductList: same-day batch found id=${sameDayBatch.id}, qty=${sameDayBatch.quantity} -> $nextQuantity',
+      );
+      await batchRepository.updateBatch(
+        sameDayBatch.copyWith(quantity: nextQuantity),
+      );
+      final List<ProductBatch> verifyBatches = await batchRepository
+          .getBatchesByProduct(existingProduct.id);
+      ProductBatch? verified;
+      for (final ProductBatch batch in verifyBatches) {
+        if (batch.id == sameDayBatch.id) {
+          verified = batch;
+          break;
+        }
+      }
+      debugPrint(
+        '[ScannerPerf] ProductList: verify updated batch id=${sameDayBatch.id}, persistedQty=${verified?.quantity}',
+      );
+    } else {
+      debugPrint(
+        '[ScannerPerf] ProductList: no same-day batch found for scanDay=${scanDate.toIso8601String()}, creating a new batch',
+      );
+      final ProductBatch? template =
+          existingBatches.isEmpty ? null : existingBatches.last;
+      final int notifDays = template?.notificationDaysBefore ?? 3;
+      final String notifTime = template?.notificationTimeLocal ?? '09:00';
+
+      final int shelfLifeDays;
+      if (template == null) {
+        shelfLifeDays = 7;
+      } else {
+        final DateTime templateBuy =
+            template.buyDate ?? template.expiryDate.subtract(const Duration(days: 7));
+        final int diff = template.expiryDate
+            .difference(DateTime(templateBuy.year, templateBuy.month, templateBuy.day))
+            .inDays;
+        shelfLifeDays = diff <= 0 ? 7 : diff;
+      }
+
+      final DateTime expiryDate = scanDate.add(Duration(days: shelfLifeDays));
+      final int batchId = await batchRepository.createBatch(
+        ProductBatchesCompanion.insert(
+          productId: existingProduct.id,
+          buyDate: drift.Value<DateTime>(scanDate),
+          expiryDate: expiryDate,
+          quantity: const drift.Value<int>(1),
+          notificationDaysBefore: drift.Value<int>(notifDays),
+          notificationTimeLocal: drift.Value<String>(notifTime),
+        ),
+      );
+
+      unawaited(
+        notificationService.scheduleExpiryNotification(
+          notificationId: batchId,
+          title: 'Expiry reminder',
+          body: '${existingProduct.canonicalName} expires soon',
+          expiryDate: expiryDate,
+          daysBefore: notifDays,
+          hhmm: notifTime,
+        ),
+      );
+      debugPrint('[ScannerPerf] ProductList: created new batch and scheduled notification');
+    }
+
+    await productRepository.restoreActive(existingProduct.id);
+    if (!mounted) return;
+    showTopSnackBar(context, 'product_scan_batch_added'.tr());
+    setState(_refreshList);
+    debugPrint(
+      '[ScannerPerf] ProductList: existing-product flow finished in ${addFlowTimer.elapsedMilliseconds}ms',
+    );
   }
 
   Future<void> _applyBatchAction(

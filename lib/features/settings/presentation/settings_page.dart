@@ -30,7 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   AppAccent _accent = AppAccent.teal;
   String _localeCode = 'en';
   bool _internetSearchEnabled = true;
-  bool _offLoggedIn = false;
+  // bool _offLoggedIn = false;
   String? _appVersion;
 
   @override
@@ -77,8 +77,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         final String lookupEnabledRaw =
             (map['lookup_open_food_facts_enabled'] ?? 'true').trim().toLowerCase();
         _internetSearchEnabled = lookupEnabledRaw == 'true';
-        _offLoggedIn =
-            (map['lookup_off_logged_in'] ?? 'false').trim().toLowerCase() == 'true';
+        // _offLoggedIn =
+        //     (map['lookup_off_logged_in'] ?? 'false').trim().toLowerCase() == 'true';
         if (pkg != null) {
           _appVersion = 'v${pkg.version}+${pkg.buildNumber}';
         }

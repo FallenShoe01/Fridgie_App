@@ -73,12 +73,14 @@ class CategoryPresetStore {
       return;
     }
 
+    // Do not overwrite an existing category's defaultExpiryDays here.
+    // We only ensure the name exists (case-insensitively). Editing defaults
+    // should be done explicitly via the UI (updateByName).
     await (_db.update(
       _db.categories,
     )..where((Categories t) => t.id.equals(existing.read<int>('id')))).write(
       CategoriesCompanion(
         name: Value<String>(name),
-        defaultExpiryDays: Value<int>(item.defaultExpiryDays),
       ),
     );
   }

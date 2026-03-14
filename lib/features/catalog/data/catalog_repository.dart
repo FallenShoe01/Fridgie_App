@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
+import 'dart:developer' as developer;
 
 class CatalogRepository {
   CatalogRepository(this._db);
@@ -112,15 +113,70 @@ class CatalogRepository {
     return query.getSingleOrNull();
   }
 
-  Future<CatalogItem?> getByBarcode(String barcode) {
-    final String normalized = barcode.trim();
-    if (normalized.isEmpty) return Future.value(null);
+  Future<CatalogItem?> getByBarcode(String barcode) async {
+    final List<String> candidates = _barcodeCandidates(barcode);
+    if (candidates.isEmpty) {
+      developer.log(
+        'getByBarcode called with empty barcode after trim',
+        name: 'CatalogRepository',
+      );
+      return Future.value(null);
+    }
+
+    developer.log(
+      'Barcode lookup candidates=$candidates',
+      name: 'CatalogRepository',
+    );
 
     final Selectable<CatalogItem> query = _db.select(_db.catalogItems)
-      ..where((CatalogItems t) => t.barcode.equals(normalized))
+      ..where((CatalogItems t) => t.barcode.isIn(candidates))
       ..limit(1);
 
-    return query.getSingleOrNull();
+    final CatalogItem? exact = await query.getSingleOrNull();
+    if (exact != null) {
+      developer.log(
+        'Exact barcode match: catalogItemId=${exact.id}, barcode=${exact.barcode}',
+        name: 'CatalogRepository',
+      );
+      return exact;
+    }
+
+    final Set<String> wantedKeys = _barcodeComparisonKeys(barcode);
+    final List<CatalogItem> rows = await (_db.select(
+      _db.catalogItems,
+    )..where((CatalogItems t) => t.barcode.isNotNull())).get();
+
+    CatalogItem? relaxed;
+    for (final CatalogItem row in rows) {
+      final String? stored = row.barcode;
+      if (stored == null || stored.trim().isEmpty) {
+        continue;
+      }
+
+      final Set<String> storedKeys = _barcodeComparisonKeys(stored);
+      final bool intersects = storedKeys.any(wantedKeys.contains);
+      if (!intersects) {
+        continue;
+      }
+
+      if (relaxed == null || row.updatedAt.isAfter(relaxed.updatedAt)) {
+        relaxed = row;
+      }
+    }
+
+    if (relaxed != null) {
+      developer.log(
+        'Relaxed barcode match: catalogItemId=${relaxed.id}, stored=${relaxed.barcode}, input=$barcode, wantedKeys=$wantedKeys',
+        name: 'CatalogRepository',
+      );
+    } else {
+      developer.log(
+        'No barcode match found for input=$barcode, wantedKeys=$wantedKeys',
+        name: 'CatalogRepository',
+      );
+    }
+
+    return relaxed;
   }
 
   Future<void> deleteById(int id) {
@@ -162,5 +218,56 @@ class CatalogRepository {
       return null;
     }
     return trimmed;
+  }
+
+  List<String> _barcodeCandidates(String barcode) {
+    final String trimmed = barcode.trim();
+    if (trimmed.isEmpty) {
+      return <String>[];
+    }
+
+    final Set<String> out = <String>{trimmed};
+
+    // Some scanners alternate UPC-A (12 digits) and EAN-13 (leading 0).
+    final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isNotEmpty) {
+      out.add(digitsOnly);
+      if (digitsOnly.length == 12) {
+        out.add('0$digitsOnly');
+      }
+      if (digitsOnly.length == 13 && digitsOnly.startsWith('0')) {
+        out.add(digitsOnly.substring(1));
+      }
+    }
+
+    return out.toList(growable: false);
+  }
+
+  Set<String> _barcodeComparisonKeys(String barcode) {
+    final String trimmed = barcode.trim();
+    if (trimmed.isEmpty) {
+      return <String>{};
+    }
+
+    final Set<String> out = <String>{trimmed.toLowerCase()};
+
+    final String compact =
+        trimmed.replaceAll(RegExp(r'[\s\-\.]'), '').toLowerCase();
+    if (compact.isNotEmpty) {
+      out.add(compact);
+    }
+
+    final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isNotEmpty) {
+      out.add(digitsOnly);
+      if (digitsOnly.length == 12) {
+        out.add('0$digitsOnly');
+      }
+      if (digitsOnly.length == 13 && digitsOnly.startsWith('0')) {
+        out.add(digitsOnly.substring(1));
+      }
+    }
+
+    return out;
   }
 }

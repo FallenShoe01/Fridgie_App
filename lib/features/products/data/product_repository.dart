@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fridgie_app/core/db/app_database.dart';
+import 'dart:developer' as developer;
 
 enum ProductSort {
   nameAsc,
@@ -139,20 +140,169 @@ class ProductRepository {
         .toList(growable: false);
   }
 
-  Future<Product?> getByBarcode(String barcode) {
-    final String normalized = barcode.trim();
-    if (normalized.isEmpty) {
+  Future<Product?> getByBarcode(String barcode) async {
+    final List<String> candidates = _barcodeCandidates(barcode);
+    if (candidates.isEmpty) {
+      developer.log(
+        'getByBarcode called with empty barcode after trim',
+        name: 'ProductRepository',
+      );
       return Future<Product?>.value(null);
     }
 
+    developer.log(
+      'Barcode lookup candidates=$candidates',
+      name: 'ProductRepository',
+    );
+
     final Selectable<Product> query = _db.select(_db.products)
-      ..where((Products t) => t.barcode.equals(normalized))
+      ..where((Products t) => t.barcode.isIn(candidates))
       ..orderBy(<OrderingTerm Function(Products)>[
         (Products t) => OrderingTerm.desc(t.updatedAt),
       ])
       ..limit(1);
 
-    return query.getSingleOrNull();
+    final Product? exact = await query.getSingleOrNull();
+    if (exact != null) {
+      developer.log(
+        'Exact barcode match: productId=${exact.id}, barcode=${exact.barcode}, status=${exact.status}',
+        name: 'ProductRepository',
+      );
+      return exact;
+    }
+
+    // Fallback: tolerate formatting differences in stored barcode values
+    // (spaces/dashes/dots) and UPC-A <-> EAN-13 leading-zero variants.
+    final Set<String> wantedKeys = _barcodeComparisonKeys(barcode);
+    if (wantedKeys.isEmpty) {
+      developer.log(
+        'No comparison keys generated for barcode=$barcode',
+        name: 'ProductRepository',
+      );
+      return null;
+    }
+
+    final List<Product> rows = await (_db.select(
+      _db.products,
+    )..where((Products t) => t.barcode.isNotNull())).get();
+
+    Product? relaxed;
+    for (final Product row in rows) {
+      final String? stored = row.barcode;
+      if (stored == null || stored.trim().isEmpty) {
+        continue;
+      }
+
+      final Set<String> storedKeys = _barcodeComparisonKeys(stored);
+      final bool intersects = storedKeys.any(wantedKeys.contains);
+      if (!intersects) {
+        continue;
+      }
+
+      if (relaxed == null || row.updatedAt.isAfter(relaxed.updatedAt)) {
+        relaxed = row;
+      }
+    }
+
+    if (relaxed != null) {
+      developer.log(
+        'Relaxed barcode match: productId=${relaxed.id}, stored=${relaxed.barcode}, input=$barcode, wantedKeys=$wantedKeys',
+        name: 'ProductRepository',
+      );
+    } else {
+      developer.log(
+        'No barcode match found for input=$barcode, wantedKeys=$wantedKeys',
+        name: 'ProductRepository',
+      );
+    }
+
+    return relaxed;
+  }
+
+  Future<Product?> getLatestByCanonicalName(
+    String canonicalName, {
+    String? category,
+  }) async {
+    final String name = canonicalName.trim();
+    if (name.isEmpty) {
+      return null;
+    }
+
+    final String? normalizedCategory = category?.trim();
+    final bool hasCategory =
+        normalizedCategory != null && normalizedCategory.isNotEmpty;
+
+    final StringBuffer sql = StringBuffer(
+      '''
+      SELECT
+        id,
+        canonical_name,
+        barcode,
+        category,
+        default_image_path,
+        source,
+        source_payload_json,
+        status,
+        status_updated_at,
+        created_at,
+        updated_at
+      FROM products
+      WHERE LOWER(canonical_name) = LOWER(?)
+      ''',
+    );
+
+    if (hasCategory) {
+      sql.write(' AND LOWER(category) = LOWER(?)');
+    }
+
+    sql.write(
+      '''
+      ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, updated_at DESC
+      LIMIT 1
+      ''',
+    );
+
+    final List<Variable<Object>> variables = <Variable<Object>>[
+      Variable<String>(name),
+      if (hasCategory) Variable<String>(normalizedCategory),
+    ];
+
+    final QueryRow? row = await _db
+        .customSelect(
+          sql.toString(),
+          variables: variables,
+          readsFrom: <ResultSetImplementation>{_db.products},
+        )
+        .getSingleOrNull();
+
+    if (row == null) {
+      developer.log(
+        'No product match by canonical name. name=$name, category=$normalizedCategory',
+        name: 'ProductRepository',
+      );
+      return null;
+    }
+
+    final Product product = Product(
+      id: row.read<int>('id'),
+      canonicalName: row.read<String>('canonical_name'),
+      barcode: row.readNullable<String>('barcode'),
+      category: row.read<String>('category'),
+      defaultImagePath: row.readNullable<String>('default_image_path'),
+      source: row.read<String>('source'),
+      sourcePayloadJson: row.readNullable<String>('source_payload_json'),
+      status: row.read<String>('status'),
+      statusUpdatedAt: row.readNullable<DateTime>('status_updated_at'),
+      createdAt: row.read<DateTime>('created_at'),
+      updatedAt: row.read<DateTime>('updated_at'),
+    );
+
+    developer.log(
+      'Canonical-name fallback matched productId=${product.id}, name=${product.canonicalName}, category=${product.category}, status=${product.status}',
+      name: 'ProductRepository',
+    );
+
+    return product;
   }
 
   Future<List<ProductListItem>> getProductList({
@@ -250,5 +400,56 @@ class ProductRepository {
       for (final QueryRow row in rows)
         row.read<String>('status'): row.read<int>('cnt'),
     };
+  }
+
+  List<String> _barcodeCandidates(String barcode) {
+    final String trimmed = barcode.trim();
+    if (trimmed.isEmpty) {
+      return <String>[];
+    }
+
+    final Set<String> out = <String>{trimmed};
+
+    // Some scanners alternate UPC-A (12 digits) and EAN-13 (leading 0).
+    final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isNotEmpty) {
+      out.add(digitsOnly);
+      if (digitsOnly.length == 12) {
+        out.add('0$digitsOnly');
+      }
+      if (digitsOnly.length == 13 && digitsOnly.startsWith('0')) {
+        out.add(digitsOnly.substring(1));
+      }
+    }
+
+    return out.toList(growable: false);
+  }
+
+  Set<String> _barcodeComparisonKeys(String barcode) {
+    final String trimmed = barcode.trim();
+    if (trimmed.isEmpty) {
+      return <String>{};
+    }
+
+    final Set<String> out = <String>{trimmed.toLowerCase()};
+
+    final String compact =
+        trimmed.replaceAll(RegExp(r'[\s\-\.]'), '').toLowerCase();
+    if (compact.isNotEmpty) {
+      out.add(compact);
+    }
+
+    final String digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isNotEmpty) {
+      out.add(digitsOnly);
+      if (digitsOnly.length == 12) {
+        out.add('0$digitsOnly');
+      }
+      if (digitsOnly.length == 13 && digitsOnly.startsWith('0')) {
+        out.add(digitsOnly.substring(1));
+      }
+    }
+
+    return out;
   }
 }

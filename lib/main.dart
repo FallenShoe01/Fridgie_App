@@ -16,7 +16,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   OpenFoodAPIConfiguration.userAgent = UserAgent(
     name: 'Fridgie',
-    version: '0.2.11',
+    version: '0.2.15',
     url: 'https://github.com/openfoodfacts/openfoodfacts-dart',
     comment: 'fridgie-app',
   );
